@@ -1,0 +1,631 @@
+;=====================================================================
+; physics.z80 - port of PRG008 player physics (small Mario, overworld)
+;
+;   Player_GroundHControl / Player_JumpFlyFlutter / gravity /
+;   Player_ApplyXVelocity / Player_ApplyYVelocity plus tile collision
+;=====================================================================
+
+PlayerPhysics:
+	xor	a
+	ld	(skidNow), a
+
+	; ---------------- horizontal control ----------------
+	ld	a, (pad)
+	ld	(tmp4), a		; pad copy
+	and	PAD_LEFT | PAD_RIGHT
+	ld	(tmp1), a		; dirPressed mask
+
+	; top speed: B held -> run
+	ld	a, (tmp4)
+	and	PAD_B
+	ld	a, P_TOPRUN
+	jr	nz, ph_ts
+	ld	a, P_TOPWALK
+ph_ts:
+	ld	(tmp3), a
+
+	; accel table index: small Mario base 0, +4 with B
+	ld	a, (tmp4)
+	and	PAD_B
+	ld	b, 0
+	jr	z, ph_yi
+	ld	b, 4
+ph_yi:
+	ld	a, (tmp1)
+	or	a
+	jr	z, ph_nodir
+
+	; ---- pressing a direction
+	inc	b
+	inc	b			; skid entry
+	call	AbsXVel
+	ld	(tmp4), a		; |xvel|
+	ld	c, a			; keep |xvel|
+	ld	a, (xvel)
+	ld	h, a			; signed xvel
+	ld	a, (tmp1)
+	and	PAD_RIGHT
+	jr	z, ph_revL
+	bit	7, h			; right pressed: reversing if xvel<0
+	jr	nz, ph_rev
+	jr	ph_norev
+ph_revL:
+	bit	7, h			; left pressed: reversing if xvel>0
+	jr	z, ph_rev
+ph_norev:
+	dec	b			; normal entry
+	ld	a, (tmp3)
+	cp	c
+	jr	nz, ph_nt1
+	jp	ph_hdone		; exactly top speed: nothing
+ph_nt1:
+	jr	nc, ph_happly		; below top: normal accel
+	ld	a, (onGround)		; above top
+	or	a
+	jr	nz, ph_nt2
+	jp	ph_hdone		; in air: nothing
+ph_nt2:
+	dec	b			; friction entry
+	jr	ph_happly
+ph_rev:
+	ld	a, c
+	or	a
+	jr	z, ph_hdone		; standing: no skid
+	; skid entry (b already skid)
+	ld	a, (onGround)
+	or	a
+	jr	z, ph_happly
+	ld	a, c
+	cp	$10
+	jr	c, ph_happly
+	ld	a, 1
+	ld	(skidNow), a
+	jr	ph_happly
+
+ph_nodir:
+	ld	a, (onGround)
+	or	a
+	jr	z, ph_hdone		; in air, no input: nothing
+	ld	a, (xvel)
+	or	a
+	jr	z, ph_hdone		; stopped: nothing
+	; friction entry (b unchanged)
+
+ph_happly:
+	ld	e, b
+	ld	d, 0
+	ld	hl, AccelMain
+	add	hl, de
+	ld	a, (hl)
+	ld	(tmp4), a
+	ld	hl, AccelPseudo
+	add	hl, de
+	ld	a, (hl)
+	ld	c, a
+	ld	a, (wiggly)
+	add	a, c
+	ld	a, 0
+	adc	a, 0
+	ld	c, a			; ripple carry
+	ld	a, (tmp4)
+	add	a, c
+	ld	(tmp4), a		; acc
+	; direction: pad direction if pressed, else sign of xvel
+	ld	a, (tmp1)
+	or	a
+	jr	nz, ph_dir1
+	ld	a, (xvel)
+	bit	7, a
+	jr	nz, ph_left
+	jr	ph_right
+ph_dir1:
+	and	PAD_RIGHT
+	jr	nz, ph_right
+ph_left:
+	ld	a, (tmp4)
+	neg
+	ld	(tmp4), a
+ph_right:
+	ld	a, (xvel)
+	ld	c, a
+	ld	a, (tmp4)
+	add	a, c
+	ld	(xvel), a
+	; clamp to +- P_MAXSPEED
+	call	AbsXVel
+	cp	P_MAXSPEED + 1
+	jr	c, ph_hdone
+	ld	a, (xvel)
+	bit	7, a
+	jr	nz, ph_clampN
+	ld	a, P_MAXSPEED
+	ld	(xvel), a
+	jr	ph_hdone
+ph_clampN:
+	ld	a, 0 - P_MAXSPEED
+	ld	(xvel), a
+ph_hdone:
+	; Counter_Wiggly ripple (PRG008: w = (w & $F0) - $90)
+	ld	a, (wiggly)
+	and	$F0
+	sub	$90
+	ld	(wiggly), a
+
+	; ---------------- jump (Player_JumpFlyFlutter) ----------------
+	ld	a, (padEdge)
+	and	PAD_A
+	jr	z, ph_nojump
+	ld	a, (onGround)
+	or	a
+	jr	z, ph_nojump
+	call	AbsXVel
+	rra
+	rra
+	rra
+	rra
+	cp	4
+	jr	c, ph_j1
+	ld	a, 3
+ph_j1:
+	ld	e, a
+	ld	d, 0
+	ld	hl, SpeedJumpInc
+	add	hl, de
+	ld	c, (hl)
+	ld	a, P_JUMP
+	sub	c
+	ld	(yvel), a
+	ld	a, 1
+	ld	(inair), a
+	xor	a
+	ld	(onGround), a
+	ld	(yfrac), a
+	call	SndPlayJump
+ph_nojump:
+
+	; ---------------- gravity ----------------
+	ld	a, (inair)
+	or	a
+	jr	z, ph_nograv
+	ld	b, P_GRAV_AIR
+	ld	a, (yvel)
+	bit	7, a
+	jr	z, ph_g1
+	cp	P_JUMPFAST
+	jr	nc, ph_g1
+	ld	a, (pad)
+	and	PAD_A
+	jr	z, ph_g1
+	ld	b, P_GRAV_HOLD
+ph_g1:
+	ld	a, (yvel)
+	add	a, b
+	bit	7, a
+	jr	nz, ph_g2
+	cp	P_FALLCAP
+	jr	c, ph_g2
+	ld	a, P_FALLCAP
+ph_g2:
+	ld	(yvel), a
+ph_nograv:
+
+	; ---------------- integrate + collide ----------------
+	call	ApplyXVel
+	call	CollideX
+	call	ApplyYVel
+	call	CollideY
+	call	GroundProbe
+	call	CoinCheck
+
+	; keep Mario inside the level
+	ld	a, (px_hi)
+	or	a
+	jr	z, pc1
+	bit	7, a
+	jr	z, pc_hi
+	xor	a
+	ld	(px_lo), a
+	ld	(px_hi), a
+	jr	pc1
+pc_hi:
+	ld	hl, (px_lo)
+	ld	de, 1392
+	or	a
+	sbc	hl, de
+	jr	c, pc1
+	ld	hl, 1392
+	ld	(px_lo), hl
+pc1:
+	call	PitCheck
+
+	; skid sound on the edge of entering a skid
+	ld	a, (skidNow)
+	ld	c, a
+	ld	a, (skidOld)
+	cp	c
+	jr	z, ph_sk1
+	ld	a, c
+	or	a
+	jr	z, ph_sk1
+	call	SndPlaySkid
+ph_sk1:
+	ld	a, c
+	ld	(skidOld), a
+	ret
+
+;=====================================================================
+; velocity integration (PRG008 Player_ApplyVelocity), 4.4 fixed point
+;=====================================================================
+ApplyXVel:
+	ld	a, (xvel)
+	ld	b, a
+	and	$0F
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	ld	c, a
+	ld	a, (xfrac)
+	add	a, c
+	ld	(xfrac), a
+	push	af
+	ld	a, b
+	sra	a
+	sra	a
+	sra	a
+	sra	a
+	ld	c, a
+	ld	b, 0
+	bit	7, c
+	jr	z, axv1
+	ld	b, $FF
+axv1:
+	pop	af
+	ld	a, (px_lo)
+	adc	a, c
+	ld	(px_lo), a
+	ld	a, (px_hi)
+	adc	a, b
+	ld	(px_hi), a
+	ret
+
+ApplyYVel:
+	ld	a, (yvel)
+	ld	b, a
+	and	$0F
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, a
+	ld	c, a
+	ld	a, (yfrac)
+	add	a, c
+	ld	(yfrac), a
+	push	af
+	ld	a, b
+	sra	a
+	sra	a
+	sra	a
+	sra	a
+	ld	c, a
+	ld	b, 0
+	bit	7, c
+	jr	z, ayv1
+	ld	b, $FF
+ayv1:
+	pop	af
+	ld	a, (py_lo)
+	adc	a, c
+	ld	(py_lo), a
+	ld	a, (py_hi)
+	adc	a, b
+	ld	(py_hi), a
+	ret
+
+;=====================================================================
+; helpers: column of px+de, row of py+de, solidity lookup
+;=====================================================================
+ColOfPx:
+	ld	hl, (px_lo)
+	add	hl, de
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	a, l
+	ret
+
+RowOfPy:
+	ld	hl, (py_lo)
+	add	hl, de
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	a, l
+	ret
+
+; col in tmp1, row in a -> Z clear when solid
+SolidAt:
+	ld	e, a
+	ld	a, (tmp1)
+	ld	d, a
+	call	TileAt
+	ld	e, a
+	ld	d, 0
+	ld	hl, SolidTab
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	ret
+
+;=====================================================================
+CollideX:
+	ld	a, (xvel)
+	or	a
+	ret	z
+	bit	7, a
+	jr	nz, cx_left
+	ld	de, 13
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	de, 0
+	call	RowOfPy
+	call	SolidAt
+	jr	nz, cx_hitR
+	ld	de, 8
+	call	RowOfPy
+	call	SolidAt
+	jr	nz, cx_hitR
+	ld	de, 15
+	call	RowOfPy
+	call	SolidAt
+	jr	nz, cx_hitR
+	ret
+cx_hitR:
+	ld	a, (tmp1)
+	add	a, a
+	add	a, a
+	add	a, a
+	sub	14
+	ld	(px_lo), a
+	jr	nc, cx_hr1
+	xor	a
+	ld	(px_lo), a
+cx_hr1:
+	xor	a
+	ld	(px_hi), a
+	ld	(xvel), a
+	ld	(xfrac), a
+	ret
+cx_left:
+	ld	de, 2
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	de, 0
+	call	RowOfPy
+	call	SolidAt
+	jr	nz, cx_hitL
+	ld	de, 8
+	call	RowOfPy
+	call	SolidAt
+	jr	nz, cx_hitL
+	ld	de, 15
+	call	RowOfPy
+	call	SolidAt
+	jr	nz, cx_hitL
+	ret
+cx_hitL:
+	ld	a, (tmp1)
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, 6
+	ld	(px_lo), a
+	xor	a
+	ld	(px_hi), a
+	ld	(xvel), a
+	ld	(xfrac), a
+	ret
+
+;=====================================================================
+CollideY:
+	ld	a, (yvel)
+	or	a
+	ret	z
+	bit	7, a
+	jr	nz, cy_up
+	ld	de, 15
+	call	RowOfPy
+	ld	(tmp2), a
+	ld	de, 2
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, cy_land
+	ld	de, 13
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, cy_land
+	ret
+cy_land:
+	ld	a, (tmp2)
+	add	a, a
+	add	a, a
+	add	a, a
+	sub	16
+	ld	(py_lo), a
+	xor	a
+	ld	(py_hi), a
+	ld	(yvel), a
+	ld	(yfrac), a
+	ld	(inair), a
+	inc	a
+	ld	(onGround), a
+	ret
+cy_up:
+	ld	de, 0
+	call	RowOfPy
+	ld	(tmp2), a
+	ld	de, 2
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, cy_bump
+	ld	de, 13
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, cy_bump
+	ret
+cy_bump:
+	ld	a, (tmp2)
+	add	a, a
+	add	a, a
+	add	a, a
+	add	a, 8
+	ld	(py_lo), a
+	xor	a
+	ld	(py_hi), a
+	ld	(yvel), a
+	ld	(yfrac), a
+	; was it a question block? left column first, then right
+	ld	de, 2
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp1)
+	ld	d, a
+	ld	a, (tmp2)
+	ld	e, a
+	call	TileAt
+	cp	T_QUEST
+	jr	z, cy_q
+	ld	de, 13
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp1)
+	ld	d, a
+	ld	a, (tmp2)
+	ld	e, a
+	call	TileAt
+	cp	T_QUEST
+	jr	nz, cy_bs
+cy_q:
+	ld	a, (tmp1)
+	ld	d, a
+	ld	a, (tmp2)
+	ld	e, a
+	ld	c, T_USED
+	call	OvlSet
+	call	SndPlayCoin
+	ret
+cy_bs:
+	call	SndPlayBump
+	ret
+
+;=====================================================================
+GroundProbe:
+	ld	a, (inair)
+	or	a
+	ret	nz
+	ld	a, (yvel)
+	or	a
+	ret	nz
+	ld	de, 16
+	call	RowOfPy
+	ld	(tmp2), a
+	ld	de, 2
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, gp_yes
+	ld	de, 13
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, gp_yes
+	xor	a
+	ld	(onGround), a
+	inc	a
+	ld	(inair), a
+	ret
+gp_yes:
+	ld	a, 1
+	ld	(onGround), a
+	ret
+
+;=====================================================================
+CoinCheck:
+	ld	de, 8
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	de, 6
+	call	RowOfPy
+	ld	(tmp2), a
+	call	CC1
+	ld	de, 12
+	call	RowOfPy
+	ld	(tmp2), a
+CC1:
+	ld	a, (tmp1)
+	ld	d, a
+	ld	a, (tmp2)
+	ld	e, a
+	push	de
+	call	TileAt
+	pop	de
+	cp	T_COIN
+	ret	nz
+	ld	c, T_BLANK
+	call	OvlSet
+	call	SndPlayCoin
+	ld	hl, coinCount
+	inc	(hl)
+	ret
+
+;=====================================================================
+PitCheck:
+	ld	a, (py_hi)
+	or	a
+	ret	nz
+	ld	a, (py_lo)
+	cp	208
+	ret	c
+	ld	hl, 32
+	ld	(px_lo), hl
+	ld	hl, 160
+	ld	(py_lo), hl
+	xor	a
+	ld	(xvel), a
+	ld	(xfrac), a
+	ld	(yvel), a
+	ld	(yfrac), a
+	ld	(inair), a
+	inc	a
+	ld	(onGround), a
+	ld	a, $FF
+	ld	(tileColCur), a
+	ret
+
+;=====================================================================
+; tables (SMB3 PRG008 values, small Mario row)
+;=====================================================================
+AccelMain:	.db $FF, $00, $02, $00, $FF, $00, $02, $00
+AccelPseudo:	.db $60, $E0, $00, $00, $60, $E0, $00, $00
+SpeedJumpInc:	.db $00, $02, $04, $08
+WalkTickMax:	.db $07, $06, $05, $04, $03, $02, $01, $01, $01
+SolidTab:	.db 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0
+WalkCycle:	.db F_STAND, F_WALK1, F_STAND, F_WALK1
+RunCycle:	.db F_RUN0, F_RUN1, F_RUN0, F_RUN1
+

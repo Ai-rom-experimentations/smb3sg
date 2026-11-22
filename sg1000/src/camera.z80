@@ -1,0 +1,224 @@
+;=====================================================================
+; camera.z80 - level tile access, overlay and the scrolling camera
+;
+; The TMS9918A has no scroll registers, so the camera streams whole
+; name-table columns (24 bytes each) as it crosses tile boundaries,
+; exactly like SG-1000 games of the era did.
+;=====================================================================
+
+; d = column, e = row -> a = tile (overlay first, then ROM)
+TileAt:
+	ld	hl, OVL_BASE
+ta_l:
+	ld	a, (hl)
+	cp	$FF
+	jr	z, ta_rom
+	cp	d
+	jr	nz, ta_n
+	inc	hl
+	ld	a, (hl)
+	dec	hl
+	cp	e
+	jr	nz, ta_n
+	inc	hl
+	inc	hl
+	ld	a, (hl)
+	dec	hl
+	dec	hl
+	ret
+ta_n:
+	inc	hl
+	inc	hl
+	inc	hl
+	jr	ta_l
+ta_rom:
+	push	de
+	ld	h, 0
+	ld	l, d
+	add	hl, hl		; x2
+	add	hl, hl		; x4
+	add	hl, hl		; x8
+	ld	d, h
+	ld	e, l
+	add	hl, hl		; x16
+	add	hl, de		; x24
+	pop	de
+	ld	d, 0
+	add	hl, de
+	ld	de, LevelData
+	add	hl, de
+	ld	a, (hl)
+	ret
+
+; d = column, e = row, c = new tile
+OvlSet:
+	ld	hl, OVL_BASE
+os_l:
+	ld	a, (hl)
+	cp	$FF
+	jr	z, os_add
+	cp	d
+	jr	nz, os_n
+	inc	hl
+	ld	a, (hl)
+	dec	hl
+	cp	e
+	jr	nz, os_n
+	inc	hl
+	inc	hl
+	ld	(hl), c
+	ret
+os_n:
+	inc	hl
+	inc	hl
+	inc	hl
+	jr	os_l
+os_add:
+	ld	(hl), d
+	inc	hl
+	ld	(hl), e
+	inc	hl
+	ld	(hl), c
+	inc	hl
+	ld	(hl), $FF
+	ld	(ovlEnd), hl
+	ret
+
+; draw one screen column; level column in (tmp1), screen x in (tmp3)
+DrawColumn:
+	ld	c, 0			; row
+dc_l:
+	ld	a, (tmp1)
+	ld	d, a
+	ld	a, c
+	ld	e, a
+	call	TileAt
+	ld	(tmp4), a
+	ld	h, 0
+	ld	l, c
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl		; row * 32
+	ld	a, (tmp3)
+	ld	e, a
+	ld	d, 0
+	add	hl, de
+	ld	de, VRAM_PNT
+	add	hl, de
+	call	VdpSetAddrW
+	ld	a, (tmp4)
+	out	(VDP_DATA), a
+	inc	c
+	ld	a, c
+	cp	24
+	jr	nz, dc_l
+	ret
+
+;=====================================================================
+CameraUpdate:
+	; cam = clamp(px - 96, 0, LEVEL_MAXCAM)
+	ld	hl, (px_lo)
+	ld	de, 96
+	or	a
+	sbc	hl, de
+	bit	7, h
+	jr	z, cu_pos
+	ld	hl, 0
+cu_pos:
+	ld	de, LEVEL_MAXCAM
+	or	a
+	sbc	hl, de
+	jr	nc, cu_max
+	add	hl, de		; below max: restore px-96
+	jr	cu_ok
+cu_max:
+	ld	hl, LEVEL_MAXCAM
+cu_ok:
+	ld	(cam_lo), hl
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	ld	a, l
+	ld	(tmp4), a		; new column
+	ld	a, (tileColCur)
+	cp	$FF
+	jr	z, cu_full
+	ld	b, a
+	ld	a, (tmp4)
+	sub	b
+	jr	z, cu_done
+	ld	c, a			; signed delta
+	bit	7, a
+	jr	z, cu_abs
+	neg
+cu_abs:
+	cp	32
+	jr	nc, cu_full
+	ld	a, c
+	bit	7, a
+	jr	nz, cu_left
+	; moved right: new columns enter at the right edge
+	ld	b, a
+	ld	a, 32
+	sub	b
+	ld	d, a			; first screen x to refresh
+cu_rl:
+	ld	a, d
+	ld	(tmp3), a
+	ld	a, (tmp4)
+	add	a, d
+	ld	(tmp1), a
+	push	de
+	push	bc
+	call	DrawColumn
+	pop	bc
+	pop	de
+	inc	d
+	ld	a, d
+	cp	32
+	jr	nz, cu_rl
+	jr	cu_set
+cu_left:
+	; moved left: new columns enter at the left edge
+	neg
+	ld	b, a
+	ld	d, 0
+cu_ll:
+	ld	a, d
+	ld	(tmp3), a
+	ld	a, (tmp4)
+	add	a, d
+	ld	(tmp1), a
+	push	de
+	push	bc
+	call	DrawColumn
+	pop	bc
+	pop	de
+	inc	d
+	djnz	cu_ll
+	jr	cu_set
+cu_full:
+	ld	b, 0
+cf_l:
+	ld	a, b
+	ld	(tmp3), a
+	ld	a, (tmp4)
+	add	a, b
+	ld	(tmp1), a
+	push	bc
+	call	DrawColumn
+	pop	bc
+	inc	b
+	ld	a, b
+	cp	32
+	jr	nz, cf_l
+cu_set:
+	ld	a, (tmp4)
+	ld	(tileColCur), a
+cu_done:
+	ret

@@ -1,0 +1,354 @@
+;=====================================================================
+;  SMB3 -> Sega SG-1000 port : main module
+;  physics + Mario sprites (3 colours) + sounds + scrolling camera
+;  + test level.
+;
+;  Hardware: Z80 @3.58MHz, TMS9918A VDP in Graphics II, SN76489 PSG
+;  VRAM map (16K):
+;    $0000  pattern generator   (3 x 2048 sections, Graphics II)
+;    $1800  pattern name table  (32 x 24)
+;    $2000  colour table        (3 x 2048 sections)
+;    $3800  sprite patterns     (36 groups x 32 bytes = 1152)
+;    $3F00  sprite attribute table (32 x 4)
+;
+;  The physics are a direct port of PRG008 of the SMB3 disassembly
+;  carried in this repository: 4.4 fixed point velocities,
+;  fractional accumulators, the accel / pseudo-fraction tables and
+;  the Counter_Wiggly ripple carry.
+;=====================================================================
+
+;--------------------------- I/O ports -------------------------------
+VDP_DATA:	.equ $BE
+VDP_CTRL:	.equ $BF
+PSG_PORT:	.equ $7F
+PAD_PORT:	.equ $C0
+
+;--------------------------- VRAM bases ------------------------------
+VRAM_PGT:	.equ $0000
+VRAM_PNT:	.equ $1800
+VRAM_CT:		.equ $2000
+VRAM_SPAT:	.equ $3800
+VRAM_SAT:	.equ $3F00
+
+;--------------------------- physics (SMB3 PRG008 values) ------------
+P_TOPWALK:	.equ $18	; PLAYER_TOPWALKSPEED
+P_TOPRUN:	.equ $28	; PLAYER_TOPRUNSPEED
+P_MAXSPEED:	.equ $40	; PLAYER_MAXSPEED
+P_JUMP:		.equ $C8	; PLAYER_JUMP (-$38)
+P_FALLCAP:	.equ $40
+P_GRAV_AIR:	.equ $05
+P_GRAV_HOLD:	.equ $01
+P_JUMPFAST:	.equ $E0	; -$20
+LEVEL_MAXCAM:	.equ 1152	; LEVEL_W*8-256
+
+;--------------------------- pad bits --------------------------------
+PAD_RIGHT:	.equ $01
+PAD_LEFT:	.equ $02
+PAD_A:		.equ $04
+PAD_B:		.equ $08
+
+;--------------------------- tiles -----------------------------------
+T_BLANK:		.equ 0
+T_QUEST:		.equ 4
+T_USED:		.equ 5
+T_COIN:		.equ 11
+
+;--------------------------- Mario frames ----------------------------
+F_STAND:		.equ 0
+F_WALK1:		.equ 1
+F_JUMP:		.equ 2
+F_SKID:		.equ 3
+F_RUN0:		.equ 4
+F_RUN1:		.equ 5
+
+;--------------------------- RAM -------------------------------------
+px_lo:		.equ $C000
+px_hi:		.equ $C001
+py_lo:		.equ $C002
+py_hi:		.equ $C003
+xvel:		.equ $C004	; signed 4.4 fixed point
+xfrac:		.equ $C005
+yvel:		.equ $C006
+yfrac:		.equ $C007
+inair:		.equ $C008
+onGround:	.equ $C009
+facing:		.equ $C00A	; 0 right, 1 left
+animTick:	.equ $C00B
+animIdx:		.equ $C00C
+frameCur:	.equ $C00D
+tileColCur:	.equ $C00E
+cam_lo:		.equ $C00F
+cam_hi:		.equ $C010
+pad:		.equ $C011
+padPrev:		.equ $C012
+padEdge:		.equ $C013
+wiggly:		.equ $C014	; Counter_Wiggly port
+skidOld:		.equ $C015
+coinCount:	.equ $C016
+sndPtr0:		.equ $C017
+sndPtr1:		.equ $C019
+sndPtr2:		.equ $C01B
+sndPtr3:		.equ $C01D
+tmp1:		.equ $C01F
+tmp2:		.equ $C020
+tmp3:		.equ $C021
+tmp4:		.equ $C022
+ovlEnd:		.equ $C023	; 2 bytes: terminator slot
+frameCnt:	.equ $C025
+scrX:		.equ $C026
+skidNow:		.equ $C027
+OVL_BASE:	.equ $C040	; 48 slots x 3 bytes
+STACK_TOP:	.equ $C3FC
+
+;=====================================================================
+	.org $0000
+	di
+	ld	sp, STACK_TOP
+	jp	Boot
+
+;=====================================================================
+; VDP helpers
+;=====================================================================
+VdpSetAddrW:				; hl = VRAM write address
+	ld	a, l
+	out	(VDP_CTRL), a
+	ld	a, h
+	or	$40
+	out	(VDP_CTRL), a
+	ret
+
+; b = register, a = value
+VdpReg:
+	out	(VDP_CTRL), a
+	ld	a, b
+	or	$80
+	out	(VDP_CTRL), a
+	ret
+
+; hl = source, de = VRAM dest, bc = count
+VdpUpload:
+	ex	de, hl
+	call	VdpSetAddrW
+	ex	de, hl
+up_l:
+	ld	a, (hl)
+	out	(VDP_DATA), a
+	inc	hl
+	dec	bc
+	ld	a, b
+	or	c
+	jr	nz, up_l
+	ret
+
+;=====================================================================
+Boot:
+	ld	b, 0			; R0 = $02 : M3 -> Graphics II
+	ld	a, $02
+	call	VdpReg
+	ld	b, 1			; R1: 16K, display on, 16x16 sprites
+	ld	a, $E2
+	call	VdpReg
+	ld	b, 2			; R2: PNT @ $1800
+	ld	a, $06
+	call	VdpReg
+	ld	b, 3			; R3: CT @ $2000
+	ld	a, $FF
+	call	VdpReg
+	ld	b, 4			; R4: PGT @ $0000
+	xor	a
+	call	VdpReg
+	ld	b, 5			; R5: SAT @ $3F00
+	ld	a, $7E
+	call	VdpReg
+	ld	b, 6			; R6: sprite PG @ $3800
+	ld	a, $07
+	call	VdpReg
+	ld	b, 7			; R7: backdrop = light blue
+	ld	a, $55
+	call	VdpReg
+
+	; ---- background tiles: the used tiles into each of the three
+	;      Graphics II sections (PGT and CT)
+	ld	b, 0
+tile_sec:
+	push	bc
+	ld	a, b
+	add	a, a
+	add	a, a
+	add	a, a		; high byte of section offset (2048*b)
+	ld	(tmp1), a
+	ld	hl, TilePatternsSec
+	ld	a, (tmp1)
+	ld	d, a
+	ld	e, 0			; VRAM_PGT + offset
+	ld	bc, 128
+	call	VdpUpload
+	ld	hl, TileColorsSec
+	ld	a, (tmp1)
+	add	a, $20		; VRAM_CT + offset
+	ld	d, a
+	ld	e, 0
+	ld	bc, 128
+	call	VdpUpload
+	pop	bc
+	inc	b
+	ld	a, b
+	cp	3
+	jr	nz, tile_sec
+
+	; ---- clear name table
+	ld	hl, VRAM_PNT
+	call	VdpSetAddrW
+	ld	bc, 768
+	ld	d, 0
+pnt_clear:
+	ld	a, d
+	out	(VDP_DATA), a
+	dec	bc
+	ld	a, b
+	or	c
+	jr	nz, pnt_clear
+
+	; ---- Mario sprite patterns
+	ld	hl, MarioPatterns
+	ld	de, VRAM_SPAT
+	ld	bc, 36 * 32
+	call	VdpUpload
+
+	; ---- hide all sprites
+	ld	hl, VRAM_SAT
+	call	VdpSetAddrW
+	ld	b, 32
+sat_clear:
+	ld	a, $D0
+	out	(VDP_DATA), a
+	xor	a
+	out	(VDP_DATA), a
+	out	(VDP_DATA), a
+	out	(VDP_DATA), a
+	djnz	sat_clear
+
+	; ---- PSG mute
+	ld	hl, PsgMute
+	ld	b, 4
+psg_m:
+	ld	a, (hl)
+	out	(PSG_PORT), a
+	inc	hl
+	djnz	psg_m
+
+	; ---- game state
+	ld	hl, 32
+	ld	(px_lo), hl
+	ld	hl, 160
+	ld	(py_lo), hl
+	xor	a
+	ld	(xvel), a
+	ld	(xfrac), a
+	ld	(yvel), a
+	ld	(yfrac), a
+	ld	(inair), a
+	ld	(pad), a
+	ld	(padPrev), a
+	ld	(wiggly), a
+	ld	(animTick), a
+	ld	(animIdx), a
+	ld	(coinCount), a
+	ld	(frameCnt), a
+	ld	(skidOld), a
+	ld	(skidNow), a
+	inc	a
+	ld	(onGround), a
+	ld	hl, $FFFF
+	ld	(frameCur), hl		; frameCur and tileColCur = $FF
+	ld	hl, OVL_BASE
+	ld	(ovlEnd), hl
+	ld	(hl), $FF
+	xor	a
+	ld	(sndPtr0), a
+	ld	(sndPtr0 + 1), a
+	ld	(sndPtr1), a
+	ld	(sndPtr1 + 1), a
+	ld	(sndPtr2), a
+	ld	(sndPtr2 + 1), a
+	ld	(sndPtr3), a
+	ld	(sndPtr3 + 1), a
+
+	call	CameraUpdate		; draws the first screen
+
+;=====================================================================
+MainLoop:
+	call	WaitVBlank
+	call	ReadPad
+	call	PlayerPhysics
+	call	CameraUpdate
+	call	DrawMario
+	call	SoundUpdate
+	jp	MainLoop
+
+;=====================================================================
+WaitVBlank:
+waitvb:
+	in	a, (VDP_CTRL)
+	add	a, a
+	jr	nc, waitvb
+	ld	hl, (frameCnt)
+	inc	hl
+	ld	(frameCnt), hl
+	ret
+
+;=====================================================================
+ReadPad:
+	in	a, (PAD_PORT)
+	cpl
+	ld	b, a
+	xor	a
+	bit	3, b
+	jr	z, rp1
+	or	PAD_RIGHT
+rp1:
+	bit	2, b
+	jr	z, rp2
+	or	PAD_LEFT
+rp2:
+	bit	4, b
+	jr	z, rp3
+	or	PAD_A
+rp3:
+	bit	5, b
+	jr	z, rp4
+	or	PAD_B
+rp4:
+	ld	(pad), a
+	ld	hl, padPrev
+	ld	c, (hl)
+	ld	(hl), a
+	ld	b, a
+	ld	a, c
+	cpl
+	and	b
+	ld	(padEdge), a
+	ret
+
+;=====================================================================
+; |xvel| in a (Z set when zero)
+AbsXVel:
+	ld	a, (xvel)
+	bit	7, a
+	ret	z
+	neg
+	ret
+
+;=====================================================================
+.include "physics.z80"
+.include "camera.z80"
+.include "mario_draw.z80"
+.include "sound.z80"
+
+;=====================================================================
+; data
+;=====================================================================
+	.org $5000
+.include "../gen/tiles.z80"
+.include "../gen/mario_sprites.z80"
+.include "../gen/level.z80"

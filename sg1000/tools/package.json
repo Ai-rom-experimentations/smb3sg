@@ -1,0 +1,11 @@
+{
+  "name": "smb3sg-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Toolchain for the SG-1000 port: Z80 assembler, headless Z80, libretro WASM core",
+  "dependencies": {
+    "@specy/z80": "^1.2.2",
+    "maz": "^0.6.1",
+    "romdev-core-gpgx": "^0.15.2"
+  }
+}

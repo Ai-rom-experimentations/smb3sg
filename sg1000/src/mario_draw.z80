@@ -1,0 +1,142 @@
+;=====================================================================
+; mario_draw.z80 - animation frame choice + 3-sprite, 3-colour draw
+;
+; The TMS9918A gives every sprite exactly one colour, so SMB3 Mario is
+; composited from three stacked 16x16 sprites (red / skin / dark),
+; which is exactly the three non-transparent colours of his NES
+; palette ($16 red, $36 skin, $0F dark).
+;=====================================================================
+
+DrawMario:
+	; ---- choose frame
+	ld	a, (inair)
+	or	a
+	jr	nz, dm_fjump
+	ld	a, (skidNow)
+	or	a
+	jr	nz, dm_fskid
+	call	AbsXVel
+	or	a
+	jr	z, dm_fstand
+	cp	P_TOPWALK + 1
+	jr	nc, dm_run
+	ld	hl, WalkCycle
+	jr	dm_cyc
+dm_run:
+	ld	hl, RunCycle
+dm_cyc:
+	ld	a, (animIdx)
+	and	3
+	ld	e, a
+	ld	d, 0
+	add	hl, de
+	ld	a, (hl)
+	jr	dm_set
+dm_fjump:
+	ld	a, F_JUMP
+	jr	dm_set
+dm_fskid:
+	ld	a, F_SKID
+	jr	dm_set
+dm_fstand:
+	ld	a, F_STAND
+dm_set:
+	ld	(frameCur), a
+
+	; ---- advance walk/run animation tick
+	call	AbsXVel
+	or	a
+	jr	z, dm_sat
+	rra
+	rra
+	rra			; |xvel| >> 3
+	cp	9
+	jr	c, dm_t1
+	ld	a, 8
+dm_t1:
+	ld	e, a
+	ld	d, 0
+	ld	hl, WalkTickMax
+	add	hl, de
+	ld	b, (hl)
+	ld	hl, animTick
+	inc	(hl)
+	ld	a, (hl)
+	cp	b
+	jr	c, dm_sat
+	ld	(hl), 0
+	ld	hl, animIdx
+	inc	(hl)
+dm_sat:
+	; ---- screen position
+	ld	hl, (px_lo)
+	ld	de, (cam_lo)
+	or	a
+	sbc	hl, de
+	ld	a, l
+	ld	(scrX), a
+
+	; ---- facing
+	ld	a, (pad)
+	and	PAD_LEFT | PAD_RIGHT
+	jr	z, dm_out
+	and	PAD_LEFT
+	jr	z, dm_fr
+	ld	a, 1
+	ld	(facing), a
+	jr	dm_out
+dm_fr:
+	xor	a
+	ld	(facing), a
+dm_out:
+	; ---- write the three sprite attributes
+	ld	hl, VRAM_SAT
+	call	VdpSetAddrW
+	ld	a, (frameCur)
+	ld	b, a
+	add	a, a		; x2
+	add	a, a		; x4
+	ld	c, a
+	ld	a, b
+	add	a, a		; x2
+	add	a, c		; x6
+	ld	b, a
+	ld	a, (facing)
+	or	a
+	jr	z, dm_g0
+	ld	a, 3
+	add	a, b
+	ld	b, a		; group base = frame*6 + facing*3
+dm_g0:
+	ld	a, (py_lo)
+	dec	a
+	ld	(tmp4), a		; SAT Y (TMS: screen y = Y+1)
+	ld	a, (scrX)
+	ld	(tmp3), a		; SAT X
+	ld	c, 0		; layer
+dm_l:
+	ld	a, (tmp4)
+	out	(VDP_DATA), a
+	ld	a, (tmp3)
+	out	(VDP_DATA), a
+	ld	a, b
+	add	a, c		; group
+	add	a, a
+	add	a, a		; pattern byte = group * 4
+	out	(VDP_DATA), a
+	ld	e, c
+	ld	d, 0
+	ld	hl, MarioCols
+	add	hl, de
+	ld	a, (hl)
+	out	(VDP_DATA), a
+	inc	c
+	ld	a, c
+	cp	3
+	jr	nz, dm_l
+	; ---- keep the remaining sprites hidden (written once at boot,
+	;      but re-assert in case anything ever touches them)
+	ret
+
+MarioCols:
+	.db MARIO_COL_RED, MARIO_COL_SKIN, MARIO_COL_DARK

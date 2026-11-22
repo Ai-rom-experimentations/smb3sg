@@ -1,0 +1,185 @@
+;=====================================================================
+; sound.z80 - SN76489 PSG effects for the SG-1000 port
+;
+; Four voices map onto the four PSG channels.  Each effect is a
+; stream of per-frame byte bursts:  <count> <bytes...> ... 0 = end.
+; The envelopes below are original designs written for this port.
+;=====================================================================
+
+SndPlayJump:
+	ld	hl, SndJump
+	ld	(sndPtr0), hl
+	ret
+
+SndPlayCoin:
+	ld	hl, SndCoin
+	ld	(sndPtr1), hl
+	ret
+
+SndPlayBump:
+	ld	hl, SndBump
+	ld	(sndPtr2), hl
+	ret
+
+SndPlaySkid:
+	ld	hl, SndSkid
+	ld	(sndPtr3), hl
+	ret
+
+;=====================================================================
+SoundUpdate:
+	; ---- voice 0 (ch0 tone): jump
+	ld	hl, (sndPtr0)
+	ld	a, h
+	or	l
+	jr	z, su1
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, su0_stop
+	ld	c, a
+su0_l:
+	ld	a, (hl)
+	out	(PSG_PORT), a
+	inc	hl
+	dec	c
+	jr	nz, su0_l
+	ex	de, hl
+	ld	(sndPtr0), de
+	jr	su1
+su0_stop:
+	xor	a
+	ld	(sndPtr0), a
+	ld	(sndPtr0 + 1), a
+	ld	a, $9F
+	out	(PSG_PORT), a
+
+	; ---- voice 1 (ch1 tone): coin
+su1:
+	ld	hl, (sndPtr1)
+	ld	a, h
+	or	l
+	jr	z, su2
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, su1_stop
+	ld	c, a
+su1_l:
+	ld	a, (hl)
+	out	(PSG_PORT), a
+	inc	hl
+	dec	c
+	jr	nz, su1_l
+	ex	de, hl
+	ld	(sndPtr1), de
+	jr	su2
+su1_stop:
+	xor	a
+	ld	(sndPtr1), a
+	ld	(sndPtr1 + 1), a
+	ld	a, $BF
+	out	(PSG_PORT), a
+
+	; ---- voice 2 (ch2 tone): bump
+su2:
+	ld	hl, (sndPtr2)
+	ld	a, h
+	or	l
+	jr	z, su3
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, su2_stop
+	ld	c, a
+su2_l:
+	ld	a, (hl)
+	out	(PSG_PORT), a
+	inc	hl
+	dec	c
+	jr	nz, su2_l
+	ex	de, hl
+	ld	(sndPtr2), de
+	jr	su3
+su2_stop:
+	xor	a
+	ld	(sndPtr2), a
+	ld	(sndPtr2 + 1), a
+	ld	a, $DF
+	out	(PSG_PORT), a
+
+	; ---- voice 3 (ch3 noise): skid
+su3:
+	ld	hl, (sndPtr3)
+	ld	a, h
+	or	l
+	ret	z
+	ld	a, (hl)
+	inc	hl
+	or	a
+	jr	z, su3_stop
+	ld	c, a
+su3_l:
+	ld	a, (hl)
+	out	(PSG_PORT), a
+	inc	hl
+	dec	c
+	jr	nz, su3_l
+	ex	de, hl
+	ld	(sndPtr3), de
+	ret
+su3_stop:
+	xor	a
+	ld	(sndPtr3), a
+	ld	(sndPtr3 + 1), a
+	ld	a, $FF
+	out	(PSG_PORT), a
+	ret
+
+;=====================================================================
+; effect streams (original envelope designs)
+;=====================================================================
+PsgMute:
+	.db $9F, $BF, $DF, $FF
+
+; jump: quick rising chirp on channel 0
+SndJump:
+	.db 3, $90, $80, $30
+	.db 2, $80, $28
+	.db 2, $80, $20
+	.db 2, $80, $18
+	.db 2, $80, $10
+	.db 2, $80, $0C
+	.db 2, $80, $08
+	.db 1, $9F
+	.db 0
+
+; coin: two-note blip on channel 1
+SndCoin:
+	.db 3, $B0, $A0, $0A
+	.db 2, $A0, $0A
+	.db 2, $A0, $0A
+	.db 2, $A0, $0A
+	.db 2, $A0, $06
+	.db 2, $A0, $06
+	.db 2, $A0, $06
+	.db 1, $BF
+	.db 0
+
+; bump: short low thud on channel 2
+SndBump:
+	.db 3, $D0, $C0, $3C
+	.db 2, $C0, $3C
+	.db 2, $C0, $3C
+	.db 2, $C0, $3C
+	.db 1, $DF
+	.db 0
+
+; skid: raspy noise burst on channel 3
+SndSkid:
+	.db 2, $F0, $04
+	.db 1, $F0
+	.db 1, $F0
+	.db 1, $F0
+	.db 1, $FF
+	.db 0
