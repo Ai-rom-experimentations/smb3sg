@@ -35,8 +35,19 @@ FRAMES = [
     ("run1",   0x35),   # PF4D run small 1
 ]
 
-# TMS9918 sprite colour codes used for the three masks
+# TMS9918A sprite colour codes for the three masks.
+#
+# Chosen as the nearest SG-1000 palette entry to each NES source colour of
+# Mario's default palette (PRG/prg008.asm: .byte $00,$16,$36,$0F), measured
+# with CIEDE2000 in sRGB->Lab:
+#   NES $16 red  (248, 56, 0)  -> TMS  8 (252, 85, 84)   dE 12.5  (next: 6 @12.9)
+#   NES $36 skin (240,208,176) -> TMS 11 (230,206,128)   dE 12.3  (next: 14 @15.0)
+#   NES $0F dark (  0,  0, 0)  -> TMS  1 (  0,  0,  0)   dE  0.0  (exact; 0 is
+#                                                            sprite-transparent)
+# These are the closest possible single-colour matches the TMS9918A offers.
 COL_RED, COL_SKIN, COL_DARK = 8, 11, 1
+NES_RGB = {1: (248, 56, 0), 2: (240, 208, 176), 3: (0, 0, 0)}
+TMS_RGB = {8: (252, 85, 84), 11: (230, 206, 128), 1: (0, 0, 0)}
 
 
 def load_tiles(page):
@@ -124,7 +135,20 @@ def main():
     with open(os.path.join(gen, "mario_sprites.z80"), "w") as f:
         f.write("\n".join(lines) + "\n")
     prev.save(os.path.join(gen, "mario_preview.png"))
-    print("wrote gen/mario_sprites.z80 and gen/mario_preview.png")
+
+    # palette comparison sheet: NES source vs chosen TMS9918A colour
+    W, H, S = 300, 120, 32
+    cmp = Image.new("RGB", (W, H), (30, 30, 60))
+    d = cmp.load()
+    rows = [(1, COL_RED), (2, COL_SKIN), (3, COL_DARK)]
+    for r, (idx, tms) in enumerate(rows):
+        y0 = 12 + r * 36
+        for x in range(S):
+            for y in range(28):
+                d[12 + x, y0 + y] = NES_RGB[idx]
+                d[12 + S + 8 + x, y0 + y] = TMS_RGB[tms]
+    cmp.save(os.path.join(gen, "mario_palette_compare.png"))
+    print("wrote gen/mario_sprites.z80, gen/mario_preview.png, gen/mario_palette_compare.png")
 
 
 if __name__ == "__main__":
