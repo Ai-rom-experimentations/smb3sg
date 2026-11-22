@@ -211,8 +211,40 @@ ph_nograv:
 
 	; ---------------- integrate + collide ----------------
 	call	ApplyXVel
+	; keep px inside the level BEFORE probing: an underflowed px
+	; wraps ColOfPx to column 255, whose out-of-level TileAt read
+	; returns garbage tiles and snapped Mario across the map
+	ld	hl, (px_lo)
+	bit	7, h
+	jr	z, pxp_pos
+	xor	a
+	ld	(px_lo), a
+	ld	(px_hi), a
+	ld	(xvel), a
+	ld	(xfrac), a
+	jr	pxp_ok
+pxp_pos:
+	ld	de, 1392
+	or	a
+	sbc	hl, de
+	jr	c, pxp_ok
+	ld	hl, 1392
+	ld	(px_lo), hl
+	xor	a
+	ld	(xvel), a
+	ld	(xfrac), a
+pxp_ok:
 	call	CollideX
 	call	ApplyYVel
+	ld	a, (py_hi)
+	bit	7, a
+	jr	z, py_ok
+	xor	a
+	ld	(py_lo), a
+	ld	(py_hi), a
+	ld	(yvel), a
+	ld	(yfrac), a
+py_ok:
 	call	CollideY
 	call	GroundProbe
 	call	CoinCheck
@@ -387,18 +419,21 @@ CollideX:
 	jr	nz, cx_hitR
 	ret
 cx_hitR:
+	; 16-bit snap: px = col*8 - 14 (columns run to 175, an 8-bit
+	; truncate here teleported Mario across the level)
 	ld	a, (tmp1)
-	add	a, a
-	add	a, a
-	add	a, a
-	sub	14
-	ld	(px_lo), a
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	de, 14
+	or	a
+	sbc	hl, de
 	jr	nc, cx_hr1
-	xor	a
-	ld	(px_lo), a
+	ld	hl, 0
 cx_hr1:
-	xor	a
-	ld	(px_hi), a
+	ld	(px_lo), hl
 	ld	(xvel), a
 	ld	(xfrac), a
 	ret
@@ -421,13 +456,14 @@ cx_left:
 	ret
 cx_hitL:
 	ld	a, (tmp1)
-	add	a, a
-	add	a, a
-	add	a, a
-	add	a, 6
-	ld	(px_lo), a
-	xor	a
-	ld	(px_hi), a
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	ld	de, 6
+	add	hl, de
+	ld	(px_lo), hl
 	ld	(xvel), a
 	ld	(xfrac), a
 	ret
@@ -450,6 +486,12 @@ CollideY:
 	jr	nz, cy_land
 	ld	de, 13
 	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, cy_land
+	ld	de, 7			; middle column: a 1-tile platform between
+	call	ColOfPx		; the edge probes must still catch
 	ld	(tmp1), a
 	ld	a, (tmp2)
 	call	SolidAt
@@ -481,6 +523,12 @@ cy_up:
 	call	SolidAt
 	jr	nz, cy_bump
 	ld	de, 13
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, cy_bump
+	ld	de, 7
 	call	ColOfPx
 	ld	(tmp1), a
 	ld	a, (tmp2)
@@ -550,6 +598,12 @@ GroundProbe:
 	call	SolidAt
 	jr	nz, gp_yes
 	ld	de, 13
+	call	ColOfPx
+	ld	(tmp1), a
+	ld	a, (tmp2)
+	call	SolidAt
+	jr	nz, gp_yes
+	ld	de, 7
 	call	ColOfPx
 	ld	(tmp1), a
 	ld	a, (tmp2)

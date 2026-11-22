@@ -231,7 +231,7 @@
   231 00c1 10f3               	djnz	sat_clear
   232
   233                         	; ---- PSG mute
-  234 00c3 211609             	ld	hl, PsgMute
+  234 00c3 218b09             	ld	hl, PsgMute
   235 00c6 0604               	ld	b, 4
   236                         psg_m:
   237 00c8 7e                 	ld	a, (hl)
@@ -276,16 +276,16 @@
   276 012a 321dc0             	ld	(sndPtr3), a
   277 012d 321ec0             	ld	(sndPtr3 + 1), a
   278
-  279 0130 cd4a07             	call	CameraUpdate		; draws the first screen
+  279 0130 cdbf07             	call	CameraUpdate		; draws the first screen
   280
   281                         ;=====================================================================
   282                         MainLoop:
   283 0133 cd4801             	call	WaitVBlank
   284 0136 cd5501             	call	ReadPad
   285 0139 cd8b01             	call	PlayerPhysics
-  286 013c cd4a07             	call	CameraUpdate
-  287 013f cd9507             	call	DrawMario
-  288 0142 cd7f08             	call	SoundUpdate
+  286 013c cdbf07             	call	CameraUpdate
+  287 013f cd0a08             	call	DrawMario
+  288 0142 cdf408             	call	SoundUpdate
   289 0145 c33301             	jp	MainLoop
   290
   291                         ;=====================================================================
@@ -439,11 +439,11 @@
    94                         ph_happly:
    95 0211 58                 	ld	e, b
    96 0212 1600               	ld	d, 0
-   97 0214 21e805             	ld	hl, AccelMain
+   97 0214 215d06             	ld	hl, AccelMain
    98 0217 19                 	add	hl, de
    99 0218 7e                 	ld	a, (hl)
   100 0219 3222c0             	ld	(tmp4), a
-  101 021c 21f005             	ld	hl, AccelPseudo
+  101 021c 216506             	ld	hl, AccelPseudo
   102 021f 19                 	add	hl, de
   103 0220 7e                 	ld	a, (hl)
   104 0221 4f                 	ld	c, a
@@ -514,7 +514,7 @@
   169                         ph_j1:
   170 0296 5f                 	ld	e, a
   171 0297 1600               	ld	d, 0
-  172 0299 21f805             	ld	hl, SpeedJumpInc
+  172 0299 216d06             	ld	hl, SpeedJumpInc
   173 029c 19                 	add	hl, de
   174 029d 4e                 	ld	c, (hl)
   175 029e 3ec8               	ld	a, P_JUMP
@@ -525,7 +525,7 @@
   180 02a9 af                 	xor	a
   181 02aa 3209c0             	ld	(onGround), a
   182 02ad 3207c0             	ld	(yfrac), a
-  183 02b0 cd6308             	call	SndPlayJump
+  183 02b0 cdd808             	call	SndPlayJump
   184                         ph_nojump:
   185
   186                         	; ---------------- gravity ----------------
@@ -555,428 +555,482 @@
   210                         ph_nograv:
   211
   212                         	; ---------------- integrate + collide ----------------
-  213 02e0 cd2f03             	call	ApplyXVel
-  214 02e3 cdcf03             	call	CollideX
-  215 02e6 cd6403             	call	ApplyYVel
-  216 02e9 cd6004             	call	CollideY
-  217 02ec cd3805             	call	GroundProbe
-  218 02ef cd7c05             	call	CoinCheck
-  219
-  220                         	; keep Mario inside the level
-  221 02f2 3a01c0             	ld	a, (px_hi)
-  222 02f5 b7                 	or	a
-  223 02f6 281e               	jr	z, pc1
-  224 02f8 cb7f               	bit	7, a
-  225 02fa 2809               	jr	z, pc_hi
-  226 02fc af                 	xor	a
-  227 02fd 3200c0             	ld	(px_lo), a
-  228 0300 3201c0             	ld	(px_hi), a
-  229 0303 1811               	jr	pc1
-  230                         pc_hi:
-  231 0305 2a00c0             	ld	hl, (px_lo)
-  232 0308 117005             	ld	de, 1392
-  233 030b b7                 	or	a
-  234 030c ed52               	sbc	hl, de
-  235 030e 3806               	jr	c, pc1
-  236 0310 217005             	ld	hl, 1392
-  237 0313 2200c0             	ld	(px_lo), hl
-  238                         pc1:
-  239 0316 cdb705             	call	PitCheck
-  240
-  241                         	; skid sound on the edge of entering a skid
-  242 0319 3a27c0             	ld	a, (skidNow)
-  243 031c 4f                 	ld	c, a
-  244 031d 3a15c0             	ld	a, (skidOld)
-  245 0320 b9                 	cp	c
-  246 0321 2807               	jr	z, ph_sk1
-  247 0323 79                 	ld	a, c
-  248 0324 b7                 	or	a
-  249 0325 2803               	jr	z, ph_sk1
-  250 0327 cd7808             	call	SndPlaySkid
-  251                         ph_sk1:
-  252 032a 79                 	ld	a, c
-  253 032b 3215c0             	ld	(skidOld), a
-  254 032e c9                 	ret
-  255
-  256                         ;=====================================================================
-  257                         ; velocity integration (PRG008 Player_ApplyVelocity), 4.4 fixed point
-  258                         ;=====================================================================
-  259                         ApplyXVel:
-  260 032f 3a04c0             	ld	a, (xvel)
-  261 0332 47                 	ld	b, a
-  262 0333 e60f               	and	$0F
-  263 0335 87                 	add	a, a
-  264 0336 87                 	add	a, a
-  265 0337 87                 	add	a, a
-  266 0338 87                 	add	a, a
-  267 0339 4f                 	ld	c, a
-  268 033a 3a05c0             	ld	a, (xfrac)
-  269 033d 81                 	add	a, c
-  270 033e 3205c0             	ld	(xfrac), a
-  271 0341 f5                 	push	af
-  272 0342 78                 	ld	a, b
-  273 0343 cb2f               	sra	a
-  274 0345 cb2f               	sra	a
-  275 0347 cb2f               	sra	a
-  276 0349 cb2f               	sra	a
-  277 034b 4f                 	ld	c, a
-  278 034c 0600               	ld	b, 0
-  279 034e cb79               	bit	7, c
-  280 0350 2802               	jr	z, axv1
-  281 0352 06ff               	ld	b, $FF
-  282                         axv1:
-  283 0354 f1                 	pop	af
-  284 0355 3a00c0             	ld	a, (px_lo)
-  285 0358 89                 	adc	a, c
-  286 0359 3200c0             	ld	(px_lo), a
-  287 035c 3a01c0             	ld	a, (px_hi)
-  288 035f 88                 	adc	a, b
-  289 0360 3201c0             	ld	(px_hi), a
-  290 0363 c9                 	ret
-  291
-  292                         ApplyYVel:
-  293 0364 3a06c0             	ld	a, (yvel)
-  294 0367 47                 	ld	b, a
-  295 0368 e60f               	and	$0F
-  296 036a 87                 	add	a, a
-  297 036b 87                 	add	a, a
-  298 036c 87                 	add	a, a
-  299 036d 87                 	add	a, a
-  300 036e 4f                 	ld	c, a
-  301 036f 3a07c0             	ld	a, (yfrac)
-  302 0372 81                 	add	a, c
-  303 0373 3207c0             	ld	(yfrac), a
-  304 0376 f5                 	push	af
-  305 0377 78                 	ld	a, b
-  306 0378 cb2f               	sra	a
-  307 037a cb2f               	sra	a
-  308 037c cb2f               	sra	a
-  309 037e cb2f               	sra	a
-  310 0380 4f                 	ld	c, a
-  311 0381 0600               	ld	b, 0
-  312 0383 cb79               	bit	7, c
-  313 0385 2802               	jr	z, ayv1
-  314 0387 06ff               	ld	b, $FF
-  315                         ayv1:
-  316 0389 f1                 	pop	af
-  317 038a 3a02c0             	ld	a, (py_lo)
-  318 038d 89                 	adc	a, c
-  319 038e 3202c0             	ld	(py_lo), a
-  320 0391 3a03c0             	ld	a, (py_hi)
-  321 0394 88                 	adc	a, b
-  322 0395 3203c0             	ld	(py_hi), a
-  323 0398 c9                 	ret
-  324
-  325                         ;=====================================================================
-  326                         ; helpers: column of px+de, row of py+de, solidity lookup
-  327                         ;=====================================================================
-  328                         ColOfPx:
-  329 0399 2a00c0             	ld	hl, (px_lo)
-  330 039c 19                 	add	hl, de
-  331 039d cb3c               	srl	h
-  332 039f cb1d               	rr	l
-  333 03a1 cb3c               	srl	h
-  334 03a3 cb1d               	rr	l
-  335 03a5 cb3c               	srl	h
-  336 03a7 cb1d               	rr	l
-  337 03a9 7d                 	ld	a, l
-  338 03aa c9                 	ret
-  339
-  340                         RowOfPy:
-  341 03ab 2a02c0             	ld	hl, (py_lo)
-  342 03ae 19                 	add	hl, de
-  343 03af cb3c               	srl	h
-  344 03b1 cb1d               	rr	l
-  345 03b3 cb3c               	srl	h
-  346 03b5 cb1d               	rr	l
-  347 03b7 cb3c               	srl	h
-  348 03b9 cb1d               	rr	l
-  349 03bb 7d                 	ld	a, l
-  350 03bc c9                 	ret
-  351
-  352                         ; col in tmp1, row in a -> Z clear when solid
-  353                         SolidAt:
-  354 03bd 5f                 	ld	e, a
-  355 03be 3a1fc0             	ld	a, (tmp1)
-  356 03c1 57                 	ld	d, a
-  357 03c2 cd1d06             	call	TileAt
-  358 03c5 5f                 	ld	e, a
-  359 03c6 1600               	ld	d, 0
-  360 03c8 210506             	ld	hl, SolidTab
-  361 03cb 19                 	add	hl, de
-  362 03cc 7e                 	ld	a, (hl)
-  363 03cd b7                 	or	a
-  364 03ce c9                 	ret
-  365
-  366                         ;=====================================================================
-  367                         CollideX:
-  368 03cf 3a04c0             	ld	a, (xvel)
-  369 03d2 b7                 	or	a
-  370 03d3 c8                 	ret	z
-  371 03d4 cb7f               	bit	7, a
-  372 03d6 2047               	jr	nz, cx_left
-  373 03d8 110d00             	ld	de, 13
-  374 03db cd9903             	call	ColOfPx
-  375 03de 321fc0             	ld	(tmp1), a
-  376 03e1 110000             	ld	de, 0
-  377 03e4 cdab03             	call	RowOfPy
-  378 03e7 cdbd03             	call	SolidAt
-  379 03ea 2017               	jr	nz, cx_hitR
-  380 03ec 110800             	ld	de, 8
-  381 03ef cdab03             	call	RowOfPy
-  382 03f2 cdbd03             	call	SolidAt
-  383 03f5 200c               	jr	nz, cx_hitR
-  384 03f7 110f00             	ld	de, 15
-  385 03fa cdab03             	call	RowOfPy
-  386 03fd cdbd03             	call	SolidAt
-  387 0400 2001               	jr	nz, cx_hitR
-  388 0402 c9                 	ret
-  389                         cx_hitR:
-  390 0403 3a1fc0             	ld	a, (tmp1)
-  391 0406 87                 	add	a, a
-  392 0407 87                 	add	a, a
-  393 0408 87                 	add	a, a
-  394 0409 d60e               	sub	14
-  395 040b 3200c0             	ld	(px_lo), a
-  396 040e 3004               	jr	nc, cx_hr1
-  397 0410 af                 	xor	a
-  398 0411 3200c0             	ld	(px_lo), a
-  399                         cx_hr1:
-  400 0414 af                 	xor	a
-  401 0415 3201c0             	ld	(px_hi), a
-  402 0418 3204c0             	ld	(xvel), a
-  403 041b 3205c0             	ld	(xfrac), a
-  404 041e c9                 	ret
-  405                         cx_left:
-  406 041f 110200             	ld	de, 2
-  407 0422 cd9903             	call	ColOfPx
-  408 0425 321fc0             	ld	(tmp1), a
-  409 0428 110000             	ld	de, 0
-  410 042b cdab03             	call	RowOfPy
-  411 042e cdbd03             	call	SolidAt
-  412 0431 2017               	jr	nz, cx_hitL
-  413 0433 110800             	ld	de, 8
-  414 0436 cdab03             	call	RowOfPy
-  415 0439 cdbd03             	call	SolidAt
-  416 043c 200c               	jr	nz, cx_hitL
-  417 043e 110f00             	ld	de, 15
-  418 0441 cdab03             	call	RowOfPy
-  419 0444 cdbd03             	call	SolidAt
-  420 0447 2001               	jr	nz, cx_hitL
-  421 0449 c9                 	ret
-  422                         cx_hitL:
-  423 044a 3a1fc0             	ld	a, (tmp1)
-  424 044d 87                 	add	a, a
-  425 044e 87                 	add	a, a
-  426 044f 87                 	add	a, a
-  427 0450 c606               	add	a, 6
-  428 0452 3200c0             	ld	(px_lo), a
-  429 0455 af                 	xor	a
-  430 0456 3201c0             	ld	(px_hi), a
-  431 0459 3204c0             	ld	(xvel), a
-  432 045c 3205c0             	ld	(xfrac), a
-  433 045f c9                 	ret
-  434
-  435                         ;=====================================================================
-  436                         CollideY:
-  437 0460 3a06c0             	ld	a, (yvel)
-  438 0463 b7                 	or	a
-  439 0464 c8                 	ret	z
-  440 0465 cb7f               	bit	7, a
-  441 0467 2049               	jr	nz, cy_up
-  442 0469 110f00             	ld	de, 15
-  443 046c cdab03             	call	RowOfPy
-  444 046f 3220c0             	ld	(tmp2), a
-  445 0472 110200             	ld	de, 2
-  446 0475 cd9903             	call	ColOfPx
-  447 0478 321fc0             	ld	(tmp1), a
-  448 047b 3a20c0             	ld	a, (tmp2)
-  449 047e cdbd03             	call	SolidAt
-  450 0481 2012               	jr	nz, cy_land
-  451 0483 110d00             	ld	de, 13
-  452 0486 cd9903             	call	ColOfPx
-  453 0489 321fc0             	ld	(tmp1), a
-  454 048c 3a20c0             	ld	a, (tmp2)
-  455 048f cdbd03             	call	SolidAt
-  456 0492 2001               	jr	nz, cy_land
-  457 0494 c9                 	ret
-  458                         cy_land:
-  459 0495 3a20c0             	ld	a, (tmp2)
-  460 0498 87                 	add	a, a
-  461 0499 87                 	add	a, a
-  462 049a 87                 	add	a, a
-  463 049b d610               	sub	16
-  464 049d 3202c0             	ld	(py_lo), a
-  465 04a0 af                 	xor	a
-  466 04a1 3203c0             	ld	(py_hi), a
-  467 04a4 3206c0             	ld	(yvel), a
-  468 04a7 3207c0             	ld	(yfrac), a
-  469 04aa 3208c0             	ld	(inair), a
-  470 04ad 3c                 	inc	a
-  471 04ae 3209c0             	ld	(onGround), a
-  472 04b1 c9                 	ret
-  473                         cy_up:
-  474 04b2 110000             	ld	de, 0
-  475 04b5 cdab03             	call	RowOfPy
-  476 04b8 3220c0             	ld	(tmp2), a
-  477 04bb 110200             	ld	de, 2
-  478 04be cd9903             	call	ColOfPx
-  479 04c1 321fc0             	ld	(tmp1), a
-  480 04c4 3a20c0             	ld	a, (tmp2)
-  481 04c7 cdbd03             	call	SolidAt
-  482 04ca 2012               	jr	nz, cy_bump
-  483 04cc 110d00             	ld	de, 13
-  484 04cf cd9903             	call	ColOfPx
-  485 04d2 321fc0             	ld	(tmp1), a
-  486 04d5 3a20c0             	ld	a, (tmp2)
-  487 04d8 cdbd03             	call	SolidAt
-  488 04db 2001               	jr	nz, cy_bump
-  489 04dd c9                 	ret
-  490                         cy_bump:
-  491 04de 3a20c0             	ld	a, (tmp2)
-  492 04e1 87                 	add	a, a
-  493 04e2 87                 	add	a, a
-  494 04e3 87                 	add	a, a
-  495 04e4 c608               	add	a, 8
-  496 04e6 3202c0             	ld	(py_lo), a
-  497 04e9 af                 	xor	a
-  498 04ea 3203c0             	ld	(py_hi), a
-  499 04ed 3206c0             	ld	(yvel), a
-  500 04f0 3207c0             	ld	(yfrac), a
-  501                         	; was it a question block? left column first, then right
-  502 04f3 110200             	ld	de, 2
-  503 04f6 cd9903             	call	ColOfPx
-  504 04f9 321fc0             	ld	(tmp1), a
-  505 04fc 3a1fc0             	ld	a, (tmp1)
-  506 04ff 57                 	ld	d, a
-  507 0500 3a20c0             	ld	a, (tmp2)
-  508 0503 5f                 	ld	e, a
-  509 0504 cd1d06             	call	TileAt
-  510 0507 fe04               	cp	T_QUEST
-  511 0509 2818               	jr	z, cy_q
-  512 050b 110d00             	ld	de, 13
-  513 050e cd9903             	call	ColOfPx
-  514 0511 321fc0             	ld	(tmp1), a
-  515 0514 3a1fc0             	ld	a, (tmp1)
-  516 0517 57                 	ld	d, a
-  517 0518 3a20c0             	ld	a, (tmp2)
-  518 051b 5f                 	ld	e, a
-  519 051c cd1d06             	call	TileAt
-  520 051f fe04               	cp	T_QUEST
-  521 0521 2011               	jr	nz, cy_bs
-  522                         cy_q:
-  523 0523 3a1fc0             	ld	a, (tmp1)
-  524 0526 57                 	ld	d, a
-  525 0527 3a20c0             	ld	a, (tmp2)
-  526 052a 5f                 	ld	e, a
-  527 052b 0e05               	ld	c, T_USED
-  528 052d cd0f07             	call	OvlSetPoke
-  529 0530 cd6a08             	call	SndPlayCoin
-  530 0533 c9                 	ret
-  531                         cy_bs:
-  532 0534 cd7108             	call	SndPlayBump
-  533 0537 c9                 	ret
-  534
-  535                         ;=====================================================================
-  536                         GroundProbe:
-  537 0538 3a08c0             	ld	a, (inair)
-  538 053b b7                 	or	a
-  539 053c c0                 	ret	nz
-  540 053d 3a06c0             	ld	a, (yvel)
-  541 0540 b7                 	or	a
-  542 0541 c0                 	ret	nz
-  543 0542 111000             	ld	de, 16
-  544 0545 cdab03             	call	RowOfPy
-  545 0548 3220c0             	ld	(tmp2), a
-  546 054b 110200             	ld	de, 2
-  547 054e cd9903             	call	ColOfPx
-  548 0551 321fc0             	ld	(tmp1), a
-  549 0554 3a20c0             	ld	a, (tmp2)
-  550 0557 cdbd03             	call	SolidAt
-  551 055a 201a               	jr	nz, gp_yes
-  552 055c 110d00             	ld	de, 13
-  553 055f cd9903             	call	ColOfPx
-  554 0562 321fc0             	ld	(tmp1), a
-  555 0565 3a20c0             	ld	a, (tmp2)
-  556 0568 cdbd03             	call	SolidAt
-  557 056b 2009               	jr	nz, gp_yes
-  558 056d af                 	xor	a
-  559 056e 3209c0             	ld	(onGround), a
-  560 0571 3c                 	inc	a
-  561 0572 3208c0             	ld	(inair), a
-  562 0575 c9                 	ret
-  563                         gp_yes:
-  564 0576 3e01               	ld	a, 1
-  565 0578 3209c0             	ld	(onGround), a
-  566 057b c9                 	ret
-  567
-  568                         ;=====================================================================
-  569                         CoinCheck:
-  570 057c 110800             	ld	de, 8
-  571 057f cd9903             	call	ColOfPx
-  572 0582 321fc0             	ld	(tmp1), a
-  573 0585 110600             	ld	de, 6
-  574 0588 cdab03             	call	RowOfPy
-  575 058b 3220c0             	ld	(tmp2), a
-  576 058e cd9a05             	call	CC1
-  577 0591 110c00             	ld	de, 12
-  578 0594 cdab03             	call	RowOfPy
-  579 0597 3220c0             	ld	(tmp2), a
-  580                         CC1:
-  581 059a 3a1fc0             	ld	a, (tmp1)
-  582 059d 57                 	ld	d, a
-  583 059e 3a20c0             	ld	a, (tmp2)
-  584 05a1 5f                 	ld	e, a
-  585 05a2 d5                 	push	de
-  586 05a3 cd1d06             	call	TileAt
-  587 05a6 d1                 	pop	de
-  588 05a7 fe0b               	cp	T_COIN
-  589 05a9 c0                 	ret	nz
-  590 05aa 0e00               	ld	c, T_BLANK
-  591 05ac cd0f07             	call	OvlSetPoke
-  592 05af cd6a08             	call	SndPlayCoin
-  593 05b2 2116c0             	ld	hl, coinCount
-  594 05b5 34                 	inc	(hl)
-  595 05b6 c9                 	ret
-  596
-  597                         ;=====================================================================
-  598                         PitCheck:
-  599 05b7 3a03c0             	ld	a, (py_hi)
-  600 05ba b7                 	or	a
-  601 05bb c0                 	ret	nz
-  602 05bc 3a02c0             	ld	a, (py_lo)
-  603 05bf fed0               	cp	208
-  604 05c1 d8                 	ret	c
-  605 05c2 212000             	ld	hl, 32
-  606 05c5 2200c0             	ld	(px_lo), hl
-  607 05c8 21a000             	ld	hl, 160
-  608 05cb 2202c0             	ld	(py_lo), hl
-  609 05ce af                 	xor	a
-  610 05cf 3204c0             	ld	(xvel), a
-  611 05d2 3205c0             	ld	(xfrac), a
-  612 05d5 3206c0             	ld	(yvel), a
-  613 05d8 3207c0             	ld	(yfrac), a
-  614 05db 3208c0             	ld	(inair), a
-  615 05de 3c                 	inc	a
-  616 05df 3209c0             	ld	(onGround), a
-  617 05e2 3eff               	ld	a, $FF
-  618 05e4 320ec0             	ld	(tileColCur), a
-  619 05e7 c9                 	ret
-  620
-  621                         ;=====================================================================
-  622                         ; tables (SMB3 PRG008 values, small Mario row)
-  623                         ;=====================================================================
-  624 05e8 ff000200ff000200   AccelMain:	.db $FF, $00, $02, $00, $FF, $00, $02, $00
-  625 05f0 60e0000060e00000   AccelPseudo:	.db $60, $E0, $00, $00, $60, $E0, $00, $00
-  626 05f8 00020408           SpeedJumpInc:	.db $00, $02, $04, $08
-  627 05fc 0706050403020101   WalkTickMax:	.db $07, $06, $05, $04, $03, $02, $01, $01, $01
+  213 02e0 cd6e03             	call	ApplyXVel
+  214                         	; keep px inside the level BEFORE probing: an underflowed px
+  215                         	; wraps ColOfPx to column 255, whose out-of-level TileAt read
+  216                         	; returns garbage tiles and snapped Mario across the map
+  217 02e3 2a00c0             	ld	hl, (px_lo)
+  218 02e6 cb7c               	bit	7, h
+  219 02e8 280f               	jr	z, pxp_pos
+  220 02ea af                 	xor	a
+  221 02eb 3200c0             	ld	(px_lo), a
+  222 02ee 3201c0             	ld	(px_hi), a
+  223 02f1 3204c0             	ld	(xvel), a
+  224 02f4 3205c0             	ld	(xfrac), a
+  225 02f7 1815               	jr	pxp_ok
+  226                         pxp_pos:
+  227 02f9 117005             	ld	de, 1392
+  228 02fc b7                 	or	a
+  229 02fd ed52               	sbc	hl, de
+  230 02ff 380d               	jr	c, pxp_ok
+  231 0301 217005             	ld	hl, 1392
+  232 0304 2200c0             	ld	(px_lo), hl
+  233 0307 af                 	xor	a
+  234 0308 3204c0             	ld	(xvel), a
+  235 030b 3205c0             	ld	(xfrac), a
+  236                         pxp_ok:
+  237 030e cd0e04             	call	CollideX
+  238 0311 cda303             	call	ApplyYVel
+  239 0314 3a03c0             	ld	a, (py_hi)
+  240 0317 cb7f               	bit	7, a
+  241 0319 280d               	jr	z, py_ok
+  242 031b af                 	xor	a
+  243 031c 3202c0             	ld	(py_lo), a
+  244 031f 3203c0             	ld	(py_hi), a
+  245 0322 3206c0             	ld	(yvel), a
+  246 0325 3207c0             	ld	(yfrac), a
+  247                         py_ok:
+  248 0328 cda204             	call	CollideY
+  249 032b cd9c05             	call	GroundProbe
+  250 032e cdf105             	call	CoinCheck
+  251
+  252                         	; keep Mario inside the level
+  253 0331 3a01c0             	ld	a, (px_hi)
+  254 0334 b7                 	or	a
+  255 0335 281e               	jr	z, pc1
+  256 0337 cb7f               	bit	7, a
+  257 0339 2809               	jr	z, pc_hi
+  258 033b af                 	xor	a
+  259 033c 3200c0             	ld	(px_lo), a
+  260 033f 3201c0             	ld	(px_hi), a
+  261 0342 1811               	jr	pc1
+  262                         pc_hi:
+  263 0344 2a00c0             	ld	hl, (px_lo)
+  264 0347 117005             	ld	de, 1392
+  265 034a b7                 	or	a
+  266 034b ed52               	sbc	hl, de
+  267 034d 3806               	jr	c, pc1
+  268 034f 217005             	ld	hl, 1392
+  269 0352 2200c0             	ld	(px_lo), hl
+  270                         pc1:
+  271 0355 cd2c06             	call	PitCheck
+  272
+  273                         	; skid sound on the edge of entering a skid
+  274 0358 3a27c0             	ld	a, (skidNow)
+  275 035b 4f                 	ld	c, a
+  276 035c 3a15c0             	ld	a, (skidOld)
+  277 035f b9                 	cp	c
+  278 0360 2807               	jr	z, ph_sk1
+  279 0362 79                 	ld	a, c
+  280 0363 b7                 	or	a
+  281 0364 2803               	jr	z, ph_sk1
+  282 0366 cded08             	call	SndPlaySkid
+  283                         ph_sk1:
+  284 0369 79                 	ld	a, c
+  285 036a 3215c0             	ld	(skidOld), a
+  286 036d c9                 	ret
+  287
+  288                         ;=====================================================================
+  289                         ; velocity integration (PRG008 Player_ApplyVelocity), 4.4 fixed point
+  290                         ;=====================================================================
+  291                         ApplyXVel:
+  292 036e 3a04c0             	ld	a, (xvel)
+  293 0371 47                 	ld	b, a
+  294 0372 e60f               	and	$0F
+  295 0374 87                 	add	a, a
+  296 0375 87                 	add	a, a
+  297 0376 87                 	add	a, a
+  298 0377 87                 	add	a, a
+  299 0378 4f                 	ld	c, a
+  300 0379 3a05c0             	ld	a, (xfrac)
+  301 037c 81                 	add	a, c
+  302 037d 3205c0             	ld	(xfrac), a
+  303 0380 f5                 	push	af
+  304 0381 78                 	ld	a, b
+  305 0382 cb2f               	sra	a
+  306 0384 cb2f               	sra	a
+  307 0386 cb2f               	sra	a
+  308 0388 cb2f               	sra	a
+  309 038a 4f                 	ld	c, a
+  310 038b 0600               	ld	b, 0
+  311 038d cb79               	bit	7, c
+  312 038f 2802               	jr	z, axv1
+  313 0391 06ff               	ld	b, $FF
+  314                         axv1:
+  315 0393 f1                 	pop	af
+  316 0394 3a00c0             	ld	a, (px_lo)
+  317 0397 89                 	adc	a, c
+  318 0398 3200c0             	ld	(px_lo), a
+  319 039b 3a01c0             	ld	a, (px_hi)
+  320 039e 88                 	adc	a, b
+  321 039f 3201c0             	ld	(px_hi), a
+  322 03a2 c9                 	ret
+  323
+  324                         ApplyYVel:
+  325 03a3 3a06c0             	ld	a, (yvel)
+  326 03a6 47                 	ld	b, a
+  327 03a7 e60f               	and	$0F
+  328 03a9 87                 	add	a, a
+  329 03aa 87                 	add	a, a
+  330 03ab 87                 	add	a, a
+  331 03ac 87                 	add	a, a
+  332 03ad 4f                 	ld	c, a
+  333 03ae 3a07c0             	ld	a, (yfrac)
+  334 03b1 81                 	add	a, c
+  335 03b2 3207c0             	ld	(yfrac), a
+  336 03b5 f5                 	push	af
+  337 03b6 78                 	ld	a, b
+  338 03b7 cb2f               	sra	a
+  339 03b9 cb2f               	sra	a
+  340 03bb cb2f               	sra	a
+  341 03bd cb2f               	sra	a
+  342 03bf 4f                 	ld	c, a
+  343 03c0 0600               	ld	b, 0
+  344 03c2 cb79               	bit	7, c
+  345 03c4 2802               	jr	z, ayv1
+  346 03c6 06ff               	ld	b, $FF
+  347                         ayv1:
+  348 03c8 f1                 	pop	af
+  349 03c9 3a02c0             	ld	a, (py_lo)
+  350 03cc 89                 	adc	a, c
+  351 03cd 3202c0             	ld	(py_lo), a
+  352 03d0 3a03c0             	ld	a, (py_hi)
+  353 03d3 88                 	adc	a, b
+  354 03d4 3203c0             	ld	(py_hi), a
+  355 03d7 c9                 	ret
+  356
+  357                         ;=====================================================================
+  358                         ; helpers: column of px+de, row of py+de, solidity lookup
+  359                         ;=====================================================================
+  360                         ColOfPx:
+  361 03d8 2a00c0             	ld	hl, (px_lo)
+  362 03db 19                 	add	hl, de
+  363 03dc cb3c               	srl	h
+  364 03de cb1d               	rr	l
+  365 03e0 cb3c               	srl	h
+  366 03e2 cb1d               	rr	l
+  367 03e4 cb3c               	srl	h
+  368 03e6 cb1d               	rr	l
+  369 03e8 7d                 	ld	a, l
+  370 03e9 c9                 	ret
+  371
+  372                         RowOfPy:
+  373 03ea 2a02c0             	ld	hl, (py_lo)
+  374 03ed 19                 	add	hl, de
+  375 03ee cb3c               	srl	h
+  376 03f0 cb1d               	rr	l
+  377 03f2 cb3c               	srl	h
+  378 03f4 cb1d               	rr	l
+  379 03f6 cb3c               	srl	h
+  380 03f8 cb1d               	rr	l
+  381 03fa 7d                 	ld	a, l
+  382 03fb c9                 	ret
+  383
+  384                         ; col in tmp1, row in a -> Z clear when solid
+  385                         SolidAt:
+  386 03fc 5f                 	ld	e, a
+  387 03fd 3a1fc0             	ld	a, (tmp1)
+  388 0400 57                 	ld	d, a
+  389 0401 cd9206             	call	TileAt
+  390 0404 5f                 	ld	e, a
+  391 0405 1600               	ld	d, 0
+  392 0407 217a06             	ld	hl, SolidTab
+  393 040a 19                 	add	hl, de
+  394 040b 7e                 	ld	a, (hl)
+  395 040c b7                 	or	a
+  396 040d c9                 	ret
+  397
+  398                         ;=====================================================================
+  399                         CollideX:
+  400 040e 3a04c0             	ld	a, (xvel)
+  401 0411 b7                 	or	a
+  402 0412 c8                 	ret	z
+  403 0413 cb7f               	bit	7, a
+  404 0415 2049               	jr	nz, cx_left
+  405 0417 110d00             	ld	de, 13
+  406 041a cdd803             	call	ColOfPx
+  407 041d 321fc0             	ld	(tmp1), a
+  408 0420 110000             	ld	de, 0
+  409 0423 cdea03             	call	RowOfPy
+  410 0426 cdfc03             	call	SolidAt
+  411 0429 2017               	jr	nz, cx_hitR
+  412 042b 110800             	ld	de, 8
+  413 042e cdea03             	call	RowOfPy
+  414 0431 cdfc03             	call	SolidAt
+  415 0434 200c               	jr	nz, cx_hitR
+  416 0436 110f00             	ld	de, 15
+  417 0439 cdea03             	call	RowOfPy
+  418 043c cdfc03             	call	SolidAt
+  419 043f 2001               	jr	nz, cx_hitR
+  420 0441 c9                 	ret
+  421                         cx_hitR:
+  422                         	; 16-bit snap: px = col*8 - 14 (columns run to 175, an 8-bit
+  423                         	; truncate here teleported Mario across the level)
+  424 0442 3a1fc0             	ld	a, (tmp1)
+  425 0445 6f                 	ld	l, a
+  426 0446 2600               	ld	h, 0
+  427 0448 29                 	add	hl, hl
+  428 0449 29                 	add	hl, hl
+  429 044a 29                 	add	hl, hl
+  430 044b 110e00             	ld	de, 14
+  431 044e b7                 	or	a
+  432 044f ed52               	sbc	hl, de
+  433 0451 3003               	jr	nc, cx_hr1
+  434 0453 210000             	ld	hl, 0
+  435                         cx_hr1:
+  436 0456 2200c0             	ld	(px_lo), hl
+  437 0459 3204c0             	ld	(xvel), a
+  438 045c 3205c0             	ld	(xfrac), a
+  439 045f c9                 	ret
+  440                         cx_left:
+  441 0460 110200             	ld	de, 2
+  442 0463 cdd803             	call	ColOfPx
+  443 0466 321fc0             	ld	(tmp1), a
+  444 0469 110000             	ld	de, 0
+  445 046c cdea03             	call	RowOfPy
+  446 046f cdfc03             	call	SolidAt
+  447 0472 2017               	jr	nz, cx_hitL
+  448 0474 110800             	ld	de, 8
+  449 0477 cdea03             	call	RowOfPy
+  450 047a cdfc03             	call	SolidAt
+  451 047d 200c               	jr	nz, cx_hitL
+  452 047f 110f00             	ld	de, 15
+  453 0482 cdea03             	call	RowOfPy
+  454 0485 cdfc03             	call	SolidAt
+  455 0488 2001               	jr	nz, cx_hitL
+  456 048a c9                 	ret
+  457                         cx_hitL:
+  458 048b 3a1fc0             	ld	a, (tmp1)
+  459 048e 6f                 	ld	l, a
+  460 048f 2600               	ld	h, 0
+  461 0491 29                 	add	hl, hl
+  462 0492 29                 	add	hl, hl
+  463 0493 29                 	add	hl, hl
+  464 0494 110600             	ld	de, 6
+  465 0497 19                 	add	hl, de
+  466 0498 2200c0             	ld	(px_lo), hl
+  467 049b 3204c0             	ld	(xvel), a
+  468 049e 3205c0             	ld	(xfrac), a
+  469 04a1 c9                 	ret
+  470
+  471                         ;=====================================================================
+  472                         CollideY:
+  473 04a2 3a06c0             	ld	a, (yvel)
+  474 04a5 b7                 	or	a
+  475 04a6 c8                 	ret	z
+  476 04a7 cb7f               	bit	7, a
+  477 04a9 205a               	jr	nz, cy_up
+  478 04ab 110f00             	ld	de, 15
+  479 04ae cdea03             	call	RowOfPy
+  480 04b1 3220c0             	ld	(tmp2), a
+  481 04b4 110200             	ld	de, 2
+  482 04b7 cdd803             	call	ColOfPx
+  483 04ba 321fc0             	ld	(tmp1), a
+  484 04bd 3a20c0             	ld	a, (tmp2)
+  485 04c0 cdfc03             	call	SolidAt
+  486 04c3 2023               	jr	nz, cy_land
+  487 04c5 110d00             	ld	de, 13
+  488 04c8 cdd803             	call	ColOfPx
+  489 04cb 321fc0             	ld	(tmp1), a
+  490 04ce 3a20c0             	ld	a, (tmp2)
+  491 04d1 cdfc03             	call	SolidAt
+  492 04d4 2012               	jr	nz, cy_land
+  493 04d6 110700             	ld	de, 7			; middle column: a 1-tile platform between
+  494 04d9 cdd803             	call	ColOfPx		; the edge probes must still catch
+  495 04dc 321fc0             	ld	(tmp1), a
+  496 04df 3a20c0             	ld	a, (tmp2)
+  497 04e2 cdfc03             	call	SolidAt
+  498 04e5 2001               	jr	nz, cy_land
+  499 04e7 c9                 	ret
+  500                         cy_land:
+  501 04e8 3a20c0             	ld	a, (tmp2)
+  502 04eb 87                 	add	a, a
+  503 04ec 87                 	add	a, a
+  504 04ed 87                 	add	a, a
+  505 04ee d610               	sub	16
+  506 04f0 3202c0             	ld	(py_lo), a
+  507 04f3 af                 	xor	a
+  508 04f4 3203c0             	ld	(py_hi), a
+  509 04f7 3206c0             	ld	(yvel), a
+  510 04fa 3207c0             	ld	(yfrac), a
+  511 04fd 3208c0             	ld	(inair), a
+  512 0500 3c                 	inc	a
+  513 0501 3209c0             	ld	(onGround), a
+  514 0504 c9                 	ret
+  515                         cy_up:
+  516 0505 110000             	ld	de, 0
+  517 0508 cdea03             	call	RowOfPy
+  518 050b 3220c0             	ld	(tmp2), a
+  519 050e 110200             	ld	de, 2
+  520 0511 cdd803             	call	ColOfPx
+  521 0514 321fc0             	ld	(tmp1), a
+  522 0517 3a20c0             	ld	a, (tmp2)
+  523 051a cdfc03             	call	SolidAt
+  524 051d 2023               	jr	nz, cy_bump
+  525 051f 110d00             	ld	de, 13
+  526 0522 cdd803             	call	ColOfPx
+  527 0525 321fc0             	ld	(tmp1), a
+  528 0528 3a20c0             	ld	a, (tmp2)
+  529 052b cdfc03             	call	SolidAt
+  530 052e 2012               	jr	nz, cy_bump
+  531 0530 110700             	ld	de, 7
+  532 0533 cdd803             	call	ColOfPx
+  533 0536 321fc0             	ld	(tmp1), a
+  534 0539 3a20c0             	ld	a, (tmp2)
+  535 053c cdfc03             	call	SolidAt
+  536 053f 2001               	jr	nz, cy_bump
+  537 0541 c9                 	ret
+  538                         cy_bump:
+  539 0542 3a20c0             	ld	a, (tmp2)
+  540 0545 87                 	add	a, a
+  541 0546 87                 	add	a, a
+  542 0547 87                 	add	a, a
+  543 0548 c608               	add	a, 8
+  544 054a 3202c0             	ld	(py_lo), a
+  545 054d af                 	xor	a
+  546 054e 3203c0             	ld	(py_hi), a
+  547 0551 3206c0             	ld	(yvel), a
+  548 0554 3207c0             	ld	(yfrac), a
+  549                         	; was it a question block? left column first, then right
+  550 0557 110200             	ld	de, 2
+  551 055a cdd803             	call	ColOfPx
+  552 055d 321fc0             	ld	(tmp1), a
+  553 0560 3a1fc0             	ld	a, (tmp1)
+  554 0563 57                 	ld	d, a
+  555 0564 3a20c0             	ld	a, (tmp2)
+  556 0567 5f                 	ld	e, a
+  557 0568 cd9206             	call	TileAt
+  558 056b fe04               	cp	T_QUEST
+  559 056d 2818               	jr	z, cy_q
+  560 056f 110d00             	ld	de, 13
+  561 0572 cdd803             	call	ColOfPx
+  562 0575 321fc0             	ld	(tmp1), a
+  563 0578 3a1fc0             	ld	a, (tmp1)
+  564 057b 57                 	ld	d, a
+  565 057c 3a20c0             	ld	a, (tmp2)
+  566 057f 5f                 	ld	e, a
+  567 0580 cd9206             	call	TileAt
+  568 0583 fe04               	cp	T_QUEST
+  569 0585 2011               	jr	nz, cy_bs
+  570                         cy_q:
+  571 0587 3a1fc0             	ld	a, (tmp1)
+  572 058a 57                 	ld	d, a
+  573 058b 3a20c0             	ld	a, (tmp2)
+  574 058e 5f                 	ld	e, a
+  575 058f 0e05               	ld	c, T_USED
+  576 0591 cd8407             	call	OvlSetPoke
+  577 0594 cddf08             	call	SndPlayCoin
+  578 0597 c9                 	ret
+  579                         cy_bs:
+  580 0598 cde608             	call	SndPlayBump
+  581 059b c9                 	ret
+  582
+  583                         ;=====================================================================
+  584                         GroundProbe:
+  585 059c 3a08c0             	ld	a, (inair)
+  586 059f b7                 	or	a
+  587 05a0 c0                 	ret	nz
+  588 05a1 3a06c0             	ld	a, (yvel)
+  589 05a4 b7                 	or	a
+  590 05a5 c0                 	ret	nz
+  591 05a6 111000             	ld	de, 16
+  592 05a9 cdea03             	call	RowOfPy
+  593 05ac 3220c0             	ld	(tmp2), a
+  594 05af 110200             	ld	de, 2
+  595 05b2 cdd803             	call	ColOfPx
+  596 05b5 321fc0             	ld	(tmp1), a
+  597 05b8 3a20c0             	ld	a, (tmp2)
+  598 05bb cdfc03             	call	SolidAt
+  599 05be 202b               	jr	nz, gp_yes
+  600 05c0 110d00             	ld	de, 13
+  601 05c3 cdd803             	call	ColOfPx
+  602 05c6 321fc0             	ld	(tmp1), a
+  603 05c9 3a20c0             	ld	a, (tmp2)
+  604 05cc cdfc03             	call	SolidAt
+  605 05cf 201a               	jr	nz, gp_yes
+  606 05d1 110700             	ld	de, 7
+  607 05d4 cdd803             	call	ColOfPx
+  608 05d7 321fc0             	ld	(tmp1), a
+  609 05da 3a20c0             	ld	a, (tmp2)
+  610 05dd cdfc03             	call	SolidAt
+  611 05e0 2009               	jr	nz, gp_yes
+  612 05e2 af                 	xor	a
+  613 05e3 3209c0             	ld	(onGround), a
+  614 05e6 3c                 	inc	a
+  615 05e7 3208c0             	ld	(inair), a
+  616 05ea c9                 	ret
+  617                         gp_yes:
+  618 05eb 3e01               	ld	a, 1
+  619 05ed 3209c0             	ld	(onGround), a
+  620 05f0 c9                 	ret
+  621
+  622                         ;=====================================================================
+  623                         CoinCheck:
+  624 05f1 110800             	ld	de, 8
+  625 05f4 cdd803             	call	ColOfPx
+  626 05f7 321fc0             	ld	(tmp1), a
+  627 05fa 110600             	ld	de, 6
+  628 05fd cdea03             	call	RowOfPy
+  629 0600 3220c0             	ld	(tmp2), a
+  630 0603 cd0f06             	call	CC1
+  631 0606 110c00             	ld	de, 12
+  632 0609 cdea03             	call	RowOfPy
+  633 060c 3220c0             	ld	(tmp2), a
+  634                         CC1:
+  635 060f 3a1fc0             	ld	a, (tmp1)
+  636 0612 57                 	ld	d, a
+  637 0613 3a20c0             	ld	a, (tmp2)
+  638 0616 5f                 	ld	e, a
+  639 0617 d5                 	push	de
+  640 0618 cd9206             	call	TileAt
+  641 061b d1                 	pop	de
+  642 061c fe0b               	cp	T_COIN
+  643 061e c0                 	ret	nz
+  644 061f 0e00               	ld	c, T_BLANK
+  645 0621 cd8407             	call	OvlSetPoke
+  646 0624 cddf08             	call	SndPlayCoin
+  647 0627 2116c0             	ld	hl, coinCount
+  648 062a 34                 	inc	(hl)
+  649 062b c9                 	ret
+  650
+  651                         ;=====================================================================
+  652                         PitCheck:
+  653 062c 3a03c0             	ld	a, (py_hi)
+  654 062f b7                 	or	a
+  655 0630 c0                 	ret	nz
+  656 0631 3a02c0             	ld	a, (py_lo)
+  657 0634 fed0               	cp	208
+  658 0636 d8                 	ret	c
+  659 0637 212000             	ld	hl, 32
+  660 063a 2200c0             	ld	(px_lo), hl
+  661 063d 21a000             	ld	hl, 160
+  662 0640 2202c0             	ld	(py_lo), hl
+  663 0643 af                 	xor	a
+  664 0644 3204c0             	ld	(xvel), a
+  665 0647 3205c0             	ld	(xfrac), a
+  666 064a 3206c0             	ld	(yvel), a
+  667 064d 3207c0             	ld	(yfrac), a
+  668 0650 3208c0             	ld	(inair), a
+  669 0653 3c                 	inc	a
+  670 0654 3209c0             	ld	(onGround), a
+  671 0657 3eff               	ld	a, $FF
+  672 0659 320ec0             	ld	(tileColCur), a
+  673 065c c9                 	ret
+  674
+  675                         ;=====================================================================
+  676                         ; tables (SMB3 PRG008 values, small Mario row)
+  677                         ;=====================================================================
+  678 065d ff000200ff000200   AccelMain:	.db $FF, $00, $02, $00, $FF, $00, $02, $00
+  679 0665 60e0000060e00000   AccelPseudo:	.db $60, $E0, $00, $00, $60, $E0, $00, $00
+  680 066d 00020408           SpeedJumpInc:	.db $00, $02, $04, $08
+  681 0671 0706050403020101   WalkTickMax:	.db $07, $06, $05, $04, $03, $02, $01, $01, $01
            01              
-  628 0605 0001010101010000   SolidTab:	.db 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0
+  682 067a 0001010101010000   SolidTab:	.db 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0
            0101000000000000
-  629 0615 00010001           WalkCycle:	.db F_STAND, F_WALK1, F_STAND, F_WALK1
-  630 0619 04050405           RunCycle:	.db F_RUN0, F_RUN1, F_RUN0, F_RUN1
-  631
-  632                        *END INCLUDE src/physics.z80
+  683 068a 00010001           WalkCycle:	.db F_STAND, F_WALK1, F_STAND, F_WALK1
+  684 068e 04050405           RunCycle:	.db F_RUN0, F_RUN1, F_RUN0, F_RUN1
+  685
+  686                        *END INCLUDE src/physics.z80
   346                         .include "camera.z80"
     1                         ;=====================================================================
     2                         ; camera.z80 - level tile access, overlay and the scrolling camera
@@ -991,81 +1045,81 @@
    11
    12                         ; d = column, e = row -> a = tile (overlay first, then ROM)
    13                         TileAt:
-   14 061d 2140c0             	ld	hl, OVL_BASE
+   14 0692 2140c0             	ld	hl, OVL_BASE
    15                         ta_l:
-   16 0620 7e                 	ld	a, (hl)
-   17 0621 feff               	cp	$FF
-   18 0623 2814               	jr	z, ta_rom
-   19 0625 ba                 	cp	d
-   20 0626 200c               	jr	nz, ta_n
-   21 0628 23                 	inc	hl
-   22 0629 7e                 	ld	a, (hl)
-   23 062a 2b                 	dec	hl
-   24 062b bb                 	cp	e
-   25 062c 2006               	jr	nz, ta_n
-   26 062e 23                 	inc	hl
-   27 062f 23                 	inc	hl
-   28 0630 7e                 	ld	a, (hl)
-   29 0631 2b                 	dec	hl
-   30 0632 2b                 	dec	hl
-   31 0633 c9                 	ret
+   16 0695 7e                 	ld	a, (hl)
+   17 0696 feff               	cp	$FF
+   18 0698 2814               	jr	z, ta_rom
+   19 069a ba                 	cp	d
+   20 069b 200c               	jr	nz, ta_n
+   21 069d 23                 	inc	hl
+   22 069e 7e                 	ld	a, (hl)
+   23 069f 2b                 	dec	hl
+   24 06a0 bb                 	cp	e
+   25 06a1 2006               	jr	nz, ta_n
+   26 06a3 23                 	inc	hl
+   27 06a4 23                 	inc	hl
+   28 06a5 7e                 	ld	a, (hl)
+   29 06a6 2b                 	dec	hl
+   30 06a7 2b                 	dec	hl
+   31 06a8 c9                 	ret
    32                         ta_n:
-   33 0634 23                 	inc	hl
-   34 0635 23                 	inc	hl
-   35 0636 23                 	inc	hl
-   36 0637 18e7               	jr	ta_l
+   33 06a9 23                 	inc	hl
+   34 06aa 23                 	inc	hl
+   35 06ab 23                 	inc	hl
+   36 06ac 18e7               	jr	ta_l
    37                         ta_rom:
-   38 0639 d5                 	push	de
-   39 063a 2600               	ld	h, 0
-   40 063c 6a                 	ld	l, d
-   41 063d 29                 	add	hl, hl		; x2
-   42 063e 29                 	add	hl, hl		; x4
-   43 063f 29                 	add	hl, hl		; x8
-   44 0640 54                 	ld	d, h
-   45 0641 5d                 	ld	e, l
-   46 0642 29                 	add	hl, hl		; x16
-   47 0643 19                 	add	hl, de		; x24
-   48 0644 d1                 	pop	de
-   49 0645 1600               	ld	d, 0
-   50 0647 19                 	add	hl, de
-   51 0648 118055             	ld	de, LevelData
-   52 064b 19                 	add	hl, de
-   53 064c 7e                 	ld	a, (hl)
-   54 064d c9                 	ret
+   38 06ae d5                 	push	de
+   39 06af 2600               	ld	h, 0
+   40 06b1 6a                 	ld	l, d
+   41 06b2 29                 	add	hl, hl		; x2
+   42 06b3 29                 	add	hl, hl		; x4
+   43 06b4 29                 	add	hl, hl		; x8
+   44 06b5 54                 	ld	d, h
+   45 06b6 5d                 	ld	e, l
+   46 06b7 29                 	add	hl, hl		; x16
+   47 06b8 19                 	add	hl, de		; x24
+   48 06b9 d1                 	pop	de
+   49 06ba 1600               	ld	d, 0
+   50 06bc 19                 	add	hl, de
+   51 06bd 118055             	ld	de, LevelData
+   52 06c0 19                 	add	hl, de
+   53 06c1 7e                 	ld	a, (hl)
+   54 06c2 c9                 	ret
    55
    56                         ; d = column, e = row, c = new tile
    57                         OvlSet:
-   58 064e 2140c0             	ld	hl, OVL_BASE
+   58 06c3 2140c0             	ld	hl, OVL_BASE
    59                         os_l:
-   60 0651 7e                 	ld	a, (hl)
-   61 0652 feff               	cp	$FF
-   62 0654 2812               	jr	z, os_add
-   63 0656 ba                 	cp	d
-   64 0657 200a               	jr	nz, os_n
-   65 0659 23                 	inc	hl
-   66 065a 7e                 	ld	a, (hl)
-   67 065b 2b                 	dec	hl
-   68 065c bb                 	cp	e
-   69 065d 2004               	jr	nz, os_n
-   70 065f 23                 	inc	hl
-   71 0660 23                 	inc	hl
-   72 0661 71                 	ld	(hl), c
-   73 0662 c9                 	ret
+   60 06c6 7e                 	ld	a, (hl)
+   61 06c7 feff               	cp	$FF
+   62 06c9 2812               	jr	z, os_add
+   63 06cb ba                 	cp	d
+   64 06cc 200a               	jr	nz, os_n
+   65 06ce 23                 	inc	hl
+   66 06cf 7e                 	ld	a, (hl)
+   67 06d0 2b                 	dec	hl
+   68 06d1 bb                 	cp	e
+   69 06d2 2004               	jr	nz, os_n
+   70 06d4 23                 	inc	hl
+   71 06d5 23                 	inc	hl
+   72 06d6 71                 	ld	(hl), c
+   73 06d7 c9                 	ret
    74                         os_n:
-   75 0663 23                 	inc	hl
-   76 0664 23                 	inc	hl
-   77 0665 23                 	inc	hl
-   78 0666 18e9               	jr	os_l
+   75 06d8 23                 	inc	hl
+   76 06d9 23                 	inc	hl
+   77 06da 23                 	inc	hl
+   78 06db 18e9               	jr	os_l
    79                         os_add:
-   80 0668 72                 	ld	(hl), d
-   81 0669 23                 	inc	hl
-   82 066a 73                 	ld	(hl), e
-   83 066b 23                 	inc	hl
-   84 066c 71                 	ld	(hl), c
-   85 066d 23                 	inc	hl
-   86 066e 36ff               	ld	(hl), $FF
-   87 0670 2223c0             	ld	(ovlEnd), hl
-   88 0673 c9                 	ret
+   80 06dd 72                 	ld	(hl), d
+   81 06de 23                 	inc	hl
+   82 06df 73                 	ld	(hl), e
+   83 06e0 23                 	inc	hl
+   84 06e1 71                 	ld	(hl), c
+   85 06e2 23                 	inc	hl
+   86 06e3 36ff               	ld	(hl), $FF
+   87 06e5 2223c0             	ld	(ovlEnd), hl
+   88 06e8 c9                 	ret
    89
    90                         ; Full background redraw. The TMS9918A has no scroll registers: PNT
    91                         ; column x always shows level column cam+x, so every camera-column
@@ -1076,185 +1130,185 @@
    96                         ; Cost: 640 tiles x ~42T + overhead ~ 30k T-states: one frame.
    97                         ; tmp4 = camera column.
    98                         RedrawWindow:
-   99 0674 3a22c0             	ld	a, (tmp4)
-  100 0677 6f                 	ld	l, a
-  101 0678 2600               	ld	h, 0
-  102 067a 29                 	add	hl, hl
-  103 067b 29                 	add	hl, hl
-  104 067c 29                 	add	hl, hl		; *8
-  105 067d 5d                 	ld	e, l
-  106 067e 54                 	ld	d, h
-  107 067f 29                 	add	hl, hl		; *16
-  108 0680 19                 	add	hl, de		; *24
-  109 0681 118055             	ld	de, LevelData
-  110 0684 19                 	add	hl, de
-  111 0685 2231c0             	ld	(rwBase), hl
-  112 0688 218018             	ld	hl, VRAM_PNT + 4 * 32
-  113 068b 222dc0             	ld	(paP), hl		; row address cursor
-  114 068e 0e04               	ld	c, 4			; row
+   99 06e9 3a22c0             	ld	a, (tmp4)
+  100 06ec 6f                 	ld	l, a
+  101 06ed 2600               	ld	h, 0
+  102 06ef 29                 	add	hl, hl
+  103 06f0 29                 	add	hl, hl
+  104 06f1 29                 	add	hl, hl		; *8
+  105 06f2 5d                 	ld	e, l
+  106 06f3 54                 	ld	d, h
+  107 06f4 29                 	add	hl, hl		; *16
+  108 06f5 19                 	add	hl, de		; *24
+  109 06f6 118055             	ld	de, LevelData
+  110 06f9 19                 	add	hl, de
+  111 06fa 2231c0             	ld	(rwBase), hl
+  112 06fd 218018             	ld	hl, VRAM_PNT + 4 * 32
+  113 0700 222dc0             	ld	(paP), hl		; row address cursor
+  114 0703 0e04               	ld	c, 4			; row
   115                         rw_row:
-  116 0690 2a31c0             	ld	hl, (rwBase)
-  117 0693 0600               	ld	b, 0
-  118 0695 09                 	add	hl, bc		; source = base + row
-  119 0696 3a2dc0             	ld	a, (paP)
-  120 0699 d3bf               	out	(VDP_CTRL), a
-  121 069b 3a2ec0             	ld	a, (paP + 1)
-  122 069e f640               	or	$40
-  123 06a0 d3bf               	out	(VDP_CTRL), a
-  124 06a2 111800             	ld	de, 24		; source stride
-  125 06a5 0620               	ld	b, 32
+  116 0705 2a31c0             	ld	hl, (rwBase)
+  117 0708 0600               	ld	b, 0
+  118 070a 09                 	add	hl, bc		; source = base + row
+  119 070b 3a2dc0             	ld	a, (paP)
+  120 070e d3bf               	out	(VDP_CTRL), a
+  121 0710 3a2ec0             	ld	a, (paP + 1)
+  122 0713 f640               	or	$40
+  123 0715 d3bf               	out	(VDP_CTRL), a
+  124 0717 111800             	ld	de, 24		; source stride
+  125 071a 0620               	ld	b, 32
   126                         rw_x:
-  127 06a7 7e                 	ld	a, (hl)
-  128 06a8 d3be               	out	(VDP_DATA), a
-  129 06aa 19                 	add	hl, de
-  130 06ab 10fa               	djnz	rw_x
-  131 06ad 3a2dc0             	ld	a, (paP)
-  132 06b0 c620               	add	a, 32
-  133 06b2 322dc0             	ld	(paP), a
-  134 06b5 3a2ec0             	ld	a, (paP + 1)
-  135 06b8 ce00               	adc	a, 0
-  136 06ba 322ec0             	ld	(paP + 1), a
-  137 06bd 0c                 	inc	c
-  138 06be 79                 	ld	a, c
-  139 06bf fe18               	cp	24
-  140 06c1 20cd               	jr	nz, rw_row
-  141 06c3 c9                 	ret
+  127 071c 7e                 	ld	a, (hl)
+  128 071d d3be               	out	(VDP_DATA), a
+  129 071f 19                 	add	hl, de
+  130 0720 10fa               	djnz	rw_x
+  131 0722 3a2dc0             	ld	a, (paP)
+  132 0725 c620               	add	a, 32
+  133 0727 322dc0             	ld	(paP), a
+  134 072a 3a2ec0             	ld	a, (paP + 1)
+  135 072d ce00               	adc	a, 0
+  136 072f 322ec0             	ld	(paP + 1), a
+  137 0732 0c                 	inc	c
+  138 0733 79                 	ld	a, c
+  139 0734 fe18               	cp	24
+  140 0736 20cd               	jr	nz, rw_row
+  141 0738 c9                 	ret
   142
   143                         ; repaint overlay entries (used blocks, collected coins) over the ROM
   144                         ; sweep; slot = (col, row, tile), col $FF terminates
   145                         RedrawOvl:
-  146 06c4 2140c0             	ld	hl, OVL_BASE
+  146 0739 2140c0             	ld	hl, OVL_BASE
   147                         ro_l:
-  148 06c7 7e                 	ld	a, (hl)
-  149 06c8 feff               	cp	$FF
-  150 06ca c8                 	ret	z
-  151 06cb 321fc0             	ld	(tmp1), a		; col
-  152 06ce 23                 	inc	hl
-  153 06cf 7e                 	ld	a, (hl)
-  154 06d0 3220c0             	ld	(tmp2), a		; row
-  155 06d3 23                 	inc	hl
-  156 06d4 7e                 	ld	a, (hl)
-  157 06d5 3221c0             	ld	(tmp3), a		; tile
-  158 06d8 23                 	inc	hl
-  159 06d9 e5                 	push	hl
-  160 06da 3a22c0             	ld	a, (tmp4)
-  161 06dd 5f                 	ld	e, a
-  162 06de 3a1fc0             	ld	a, (tmp1)
-  163 06e1 93                 	sub	e
-  164 06e2 3828               	jr	c, ro_next		; left of window
-  165 06e4 fe20               	cp	32
-  166 06e6 3024               	jr	nc, ro_next		; right of window
-  167 06e8 5f                 	ld	e, a			; screen x
-  168 06e9 3a20c0             	ld	a, (tmp2)
-  169 06ec fe04               	cp	4
-  170 06ee 381c               	jr	c, ro_next
-  171 06f0 fe18               	cp	24
-  172 06f2 3018               	jr	nc, ro_next
-  173 06f4 57                 	ld	d, a			; row
-  174 06f5 2600               	ld	h, 0
-  175 06f7 6a                 	ld	l, d
-  176 06f8 29                 	add	hl, hl
-  177 06f9 29                 	add	hl, hl
-  178 06fa 29                 	add	hl, hl
-  179 06fb 29                 	add	hl, hl
-  180 06fc 29                 	add	hl, hl		; row*32
-  181 06fd 1600               	ld	d, 0
-  182 06ff 19                 	add	hl, de
-  183 0700 110018             	ld	de, VRAM_PNT
-  184 0703 19                 	add	hl, de
-  185 0704 cd0700             	call	VdpSetAddrW
-  186 0707 3a21c0             	ld	a, (tmp3)
-  187 070a d3be               	out	(VDP_DATA), a
+  148 073c 7e                 	ld	a, (hl)
+  149 073d feff               	cp	$FF
+  150 073f c8                 	ret	z
+  151 0740 321fc0             	ld	(tmp1), a		; col
+  152 0743 23                 	inc	hl
+  153 0744 7e                 	ld	a, (hl)
+  154 0745 3220c0             	ld	(tmp2), a		; row
+  155 0748 23                 	inc	hl
+  156 0749 7e                 	ld	a, (hl)
+  157 074a 3221c0             	ld	(tmp3), a		; tile
+  158 074d 23                 	inc	hl
+  159 074e e5                 	push	hl
+  160 074f 3a22c0             	ld	a, (tmp4)
+  161 0752 5f                 	ld	e, a
+  162 0753 3a1fc0             	ld	a, (tmp1)
+  163 0756 93                 	sub	e
+  164 0757 3828               	jr	c, ro_next		; left of window
+  165 0759 fe20               	cp	32
+  166 075b 3024               	jr	nc, ro_next		; right of window
+  167 075d 5f                 	ld	e, a			; screen x
+  168 075e 3a20c0             	ld	a, (tmp2)
+  169 0761 fe04               	cp	4
+  170 0763 381c               	jr	c, ro_next
+  171 0765 fe18               	cp	24
+  172 0767 3018               	jr	nc, ro_next
+  173 0769 57                 	ld	d, a			; row
+  174 076a 2600               	ld	h, 0
+  175 076c 6a                 	ld	l, d
+  176 076d 29                 	add	hl, hl
+  177 076e 29                 	add	hl, hl
+  178 076f 29                 	add	hl, hl
+  179 0770 29                 	add	hl, hl
+  180 0771 29                 	add	hl, hl		; row*32
+  181 0772 1600               	ld	d, 0
+  182 0774 19                 	add	hl, de
+  183 0775 110018             	ld	de, VRAM_PNT
+  184 0778 19                 	add	hl, de
+  185 0779 cd0700             	call	VdpSetAddrW
+  186 077c 3a21c0             	ld	a, (tmp3)
+  187 077f d3be               	out	(VDP_DATA), a
   188                         ro_next:
-  189 070c e1                 	pop	hl
-  190 070d 18b8               	jr	ro_l
+  189 0781 e1                 	pop	hl
+  190 0782 18b8               	jr	ro_l
   191
   192                         OvlSetPoke:
-  193 070f cd4e06             	call	OvlSet
-  194 0712 c5                 	push	bc
-  195 0713 d5                 	push	de
-  196 0714 2a0fc0             	ld	hl, (cam_lo)
-  197 0717 cb3c               	srl	h
-  198 0719 cb1d               	rr	l
-  199 071b cb3c               	srl	h
-  200 071d cb1d               	rr	l
-  201 071f cb3c               	srl	h
-  202 0721 cb1d               	rr	l			; hl = camera column
-  203 0723 7a                 	ld	a, d
-  204 0724 95                 	sub	l
-  205 0725 3820               	jr	c, osp_out		; left of the window
-  206 0727 fe20               	cp	32
-  207 0729 301c               	jr	nc, osp_out		; right of the window
-  208 072b 3221c0             	ld	(tmp3), a		; screen x
-  209 072e 2600               	ld	h, 0
-  210 0730 6b                 	ld	l, e			; row
-  211 0731 29                 	add	hl, hl
-  212 0732 29                 	add	hl, hl
-  213 0733 29                 	add	hl, hl
-  214 0734 29                 	add	hl, hl
-  215 0735 29                 	add	hl, hl		; row*32
-  216 0736 3a21c0             	ld	a, (tmp3)
-  217 0739 5f                 	ld	e, a
-  218 073a 1600               	ld	d, 0
-  219 073c 19                 	add	hl, de
-  220 073d 110018             	ld	de, VRAM_PNT
-  221 0740 19                 	add	hl, de
-  222 0741 cd0700             	call	VdpSetAddrW
-  223 0744 79                 	ld	a, c
-  224 0745 d3be               	out	(VDP_DATA), a
+  193 0784 cdc306             	call	OvlSet
+  194 0787 c5                 	push	bc
+  195 0788 d5                 	push	de
+  196 0789 2a0fc0             	ld	hl, (cam_lo)
+  197 078c cb3c               	srl	h
+  198 078e cb1d               	rr	l
+  199 0790 cb3c               	srl	h
+  200 0792 cb1d               	rr	l
+  201 0794 cb3c               	srl	h
+  202 0796 cb1d               	rr	l			; hl = camera column
+  203 0798 7a                 	ld	a, d
+  204 0799 95                 	sub	l
+  205 079a 3820               	jr	c, osp_out		; left of the window
+  206 079c fe20               	cp	32
+  207 079e 301c               	jr	nc, osp_out		; right of the window
+  208 07a0 3221c0             	ld	(tmp3), a		; screen x
+  209 07a3 2600               	ld	h, 0
+  210 07a5 6b                 	ld	l, e			; row
+  211 07a6 29                 	add	hl, hl
+  212 07a7 29                 	add	hl, hl
+  213 07a8 29                 	add	hl, hl
+  214 07a9 29                 	add	hl, hl
+  215 07aa 29                 	add	hl, hl		; row*32
+  216 07ab 3a21c0             	ld	a, (tmp3)
+  217 07ae 5f                 	ld	e, a
+  218 07af 1600               	ld	d, 0
+  219 07b1 19                 	add	hl, de
+  220 07b2 110018             	ld	de, VRAM_PNT
+  221 07b5 19                 	add	hl, de
+  222 07b6 cd0700             	call	VdpSetAddrW
+  223 07b9 79                 	ld	a, c
+  224 07ba d3be               	out	(VDP_DATA), a
   225                         osp_out:
-  226 0747 d1                 	pop	de
-  227 0748 c1                 	pop	bc
-  228 0749 c9                 	ret
+  226 07bc d1                 	pop	de
+  227 07bd c1                 	pop	bc
+  228 07be c9                 	ret
   229
   230                         ;=====================================================================
   231                         CameraUpdate:
   232                         	; cam = clamp(px - 96, 0, LEVEL_MAXCAM)
-  233 074a 2a00c0             	ld	hl, (px_lo)
-  234 074d 116000             	ld	de, 96
-  235 0750 b7                 	or	a
-  236 0751 ed52               	sbc	hl, de
-  237 0753 cb7c               	bit	7, h
-  238 0755 2803               	jr	z, cu_pos
-  239 0757 210000             	ld	hl, 0
+  233 07bf 2a00c0             	ld	hl, (px_lo)
+  234 07c2 116000             	ld	de, 96
+  235 07c5 b7                 	or	a
+  236 07c6 ed52               	sbc	hl, de
+  237 07c8 cb7c               	bit	7, h
+  238 07ca 2803               	jr	z, cu_pos
+  239 07cc 210000             	ld	hl, 0
   240                         cu_pos:
-  241 075a 118004             	ld	de, LEVEL_MAXCAM
-  242 075d b7                 	or	a
-  243 075e ed52               	sbc	hl, de
-  244 0760 3003               	jr	nc, cu_max
-  245 0762 19                 	add	hl, de		; below max: restore px-96
-  246 0763 1803               	jr	cu_ok
+  241 07cf 118004             	ld	de, LEVEL_MAXCAM
+  242 07d2 b7                 	or	a
+  243 07d3 ed52               	sbc	hl, de
+  244 07d5 3003               	jr	nc, cu_max
+  245 07d7 19                 	add	hl, de		; below max: restore px-96
+  246 07d8 1803               	jr	cu_ok
   247                         cu_max:
-  248 0765 218004             	ld	hl, LEVEL_MAXCAM
+  248 07da 218004             	ld	hl, LEVEL_MAXCAM
   249                         cu_ok:
-  250 0768 220fc0             	ld	(cam_lo), hl
-  251 076b cb3c               	srl	h
-  252 076d cb1d               	rr	l
-  253 076f cb3c               	srl	h
-  254 0771 cb1d               	rr	l
-  255 0773 cb3c               	srl	h
-  256 0775 cb1d               	rr	l
-  257 0777 7d                 	ld	a, l
-  258 0778 3222c0             	ld	(tmp4), a		; new column
+  250 07dd 220fc0             	ld	(cam_lo), hl
+  251 07e0 cb3c               	srl	h
+  252 07e2 cb1d               	rr	l
+  253 07e4 cb3c               	srl	h
+  254 07e6 cb1d               	rr	l
+  255 07e8 cb3c               	srl	h
+  256 07ea cb1d               	rr	l
+  257 07ec 7d                 	ld	a, l
+  258 07ed 3222c0             	ld	(tmp4), a		; new column
   259                         	; The TMS9918A has no scroll registers: PNT column x always shows
   260                         	; level column cam+x, so ANY camera-column change must repaint the
   261                         	; whole 32-column window. The row-major sweep (RedrawWindow) costs
   262                         	; ~30k T-states, so the full redraw fits in ONE frame even at run
   263                         	; speed (a camera column lasts >= 2 frames) - no conveyor, no
   264                         	; partially-stale screen.
-  265 077b 3a0ec0             	ld	a, (tileColCur)
-  266 077e feff               	cp	$FF
-  267 0780 2806               	jr	z, cu_redraw
-  268 0782 47                 	ld	b, a
-  269 0783 3a22c0             	ld	a, (tmp4)
-  270 0786 90                 	sub	b
-  271 0787 c8                 	ret	z			; camera column unchanged
+  265 07f0 3a0ec0             	ld	a, (tileColCur)
+  266 07f3 feff               	cp	$FF
+  267 07f5 2806               	jr	z, cu_redraw
+  268 07f7 47                 	ld	b, a
+  269 07f8 3a22c0             	ld	a, (tmp4)
+  270 07fb 90                 	sub	b
+  271 07fc c8                 	ret	z			; camera column unchanged
   272                         cu_redraw:
-  273 0788 3a22c0             	ld	a, (tmp4)
-  274 078b 320ec0             	ld	(tileColCur), a
-  275 078e cd7406             	call	RedrawWindow
-  276 0791 cdc406             	call	RedrawOvl
-  277 0794 c9                 	ret
+  273 07fd 3a22c0             	ld	a, (tmp4)
+  274 0800 320ec0             	ld	(tileColCur), a
+  275 0803 cde906             	call	RedrawWindow
+  276 0806 cd3907             	call	RedrawOvl
+  277 0809 c9                 	ret
   278                        *END INCLUDE src/camera.z80
   347                         .include "mario_draw.z80"
     1                         ;=====================================================================
@@ -1268,137 +1322,137 @@
     9
    10                         DrawMario:
    11                         	; ---- choose frame
-   12 0795 3a08c0             	ld	a, (inair)
-   13 0798 b7                 	or	a
-   14 0799 2024               	jr	nz, dm_fjump
-   15 079b 3a27c0             	ld	a, (skidNow)
-   16 079e b7                 	or	a
-   17 079f 2022               	jr	nz, dm_fskid
-   18 07a1 cd8201             	call	AbsXVel
-   19 07a4 b7                 	or	a
-   20 07a5 2820               	jr	z, dm_fstand
-   21 07a7 fe19               	cp	P_TOPWALK + 1
-   22 07a9 3005               	jr	nc, dm_run
-   23 07ab 211506             	ld	hl, WalkCycle
-   24 07ae 1803               	jr	dm_cyc
+   12 080a 3a08c0             	ld	a, (inair)
+   13 080d b7                 	or	a
+   14 080e 2024               	jr	nz, dm_fjump
+   15 0810 3a27c0             	ld	a, (skidNow)
+   16 0813 b7                 	or	a
+   17 0814 2022               	jr	nz, dm_fskid
+   18 0816 cd8201             	call	AbsXVel
+   19 0819 b7                 	or	a
+   20 081a 2820               	jr	z, dm_fstand
+   21 081c fe19               	cp	P_TOPWALK + 1
+   22 081e 3005               	jr	nc, dm_run
+   23 0820 218a06             	ld	hl, WalkCycle
+   24 0823 1803               	jr	dm_cyc
    25                         dm_run:
-   26 07b0 211906             	ld	hl, RunCycle
+   26 0825 218e06             	ld	hl, RunCycle
    27                         dm_cyc:
-   28 07b3 3a0cc0             	ld	a, (animIdx)
-   29 07b6 e603               	and	3
-   30 07b8 5f                 	ld	e, a
-   31 07b9 1600               	ld	d, 0
-   32 07bb 19                 	add	hl, de
-   33 07bc 7e                 	ld	a, (hl)
-   34 07bd 180a               	jr	dm_set
+   28 0828 3a0cc0             	ld	a, (animIdx)
+   29 082b e603               	and	3
+   30 082d 5f                 	ld	e, a
+   31 082e 1600               	ld	d, 0
+   32 0830 19                 	add	hl, de
+   33 0831 7e                 	ld	a, (hl)
+   34 0832 180a               	jr	dm_set
    35                         dm_fjump:
-   36 07bf 3e02               	ld	a, F_JUMP
-   37 07c1 1806               	jr	dm_set
+   36 0834 3e02               	ld	a, F_JUMP
+   37 0836 1806               	jr	dm_set
    38                         dm_fskid:
-   39 07c3 3e03               	ld	a, F_SKID
-   40 07c5 1802               	jr	dm_set
+   39 0838 3e03               	ld	a, F_SKID
+   40 083a 1802               	jr	dm_set
    41                         dm_fstand:
-   42 07c7 3e00               	ld	a, F_STAND
+   42 083c 3e00               	ld	a, F_STAND
    43                         dm_set:
-   44 07c9 320dc0             	ld	(frameCur), a
+   44 083e 320dc0             	ld	(frameCur), a
    45
    46                         	; ---- advance walk/run animation tick
-   47 07cc cd8201             	call	AbsXVel
-   48 07cf b7                 	or	a
-   49 07d0 281f               	jr	z, dm_sat
-   50 07d2 1f                 	rra
-   51 07d3 1f                 	rra
-   52 07d4 1f                 	rra			; |xvel| >> 3
-   53 07d5 fe09               	cp	9
-   54 07d7 3802               	jr	c, dm_t1
-   55 07d9 3e08               	ld	a, 8
+   47 0841 cd8201             	call	AbsXVel
+   48 0844 b7                 	or	a
+   49 0845 281f               	jr	z, dm_sat
+   50 0847 1f                 	rra
+   51 0848 1f                 	rra
+   52 0849 1f                 	rra			; |xvel| >> 3
+   53 084a fe09               	cp	9
+   54 084c 3802               	jr	c, dm_t1
+   55 084e 3e08               	ld	a, 8
    56                         dm_t1:
-   57 07db 5f                 	ld	e, a
-   58 07dc 1600               	ld	d, 0
-   59 07de 21fc05             	ld	hl, WalkTickMax
-   60 07e1 19                 	add	hl, de
-   61 07e2 46                 	ld	b, (hl)
-   62 07e3 210bc0             	ld	hl, animTick
-   63 07e6 34                 	inc	(hl)
-   64 07e7 7e                 	ld	a, (hl)
-   65 07e8 b8                 	cp	b
-   66 07e9 3806               	jr	c, dm_sat
-   67 07eb 3600               	ld	(hl), 0
-   68 07ed 210cc0             	ld	hl, animIdx
-   69 07f0 34                 	inc	(hl)
+   57 0850 5f                 	ld	e, a
+   58 0851 1600               	ld	d, 0
+   59 0853 217106             	ld	hl, WalkTickMax
+   60 0856 19                 	add	hl, de
+   61 0857 46                 	ld	b, (hl)
+   62 0858 210bc0             	ld	hl, animTick
+   63 085b 34                 	inc	(hl)
+   64 085c 7e                 	ld	a, (hl)
+   65 085d b8                 	cp	b
+   66 085e 3806               	jr	c, dm_sat
+   67 0860 3600               	ld	(hl), 0
+   68 0862 210cc0             	ld	hl, animIdx
+   69 0865 34                 	inc	(hl)
    70                         dm_sat:
    71                         	; ---- screen position
-   72 07f1 2a00c0             	ld	hl, (px_lo)
-   73 07f4 ed5b0fc0           	ld	de, (cam_lo)
-   74 07f8 b7                 	or	a
-   75 07f9 ed52               	sbc	hl, de
-   76 07fb 7d                 	ld	a, l
-   77 07fc 3226c0             	ld	(scrX), a
+   72 0866 2a00c0             	ld	hl, (px_lo)
+   73 0869 ed5b0fc0           	ld	de, (cam_lo)
+   74 086d b7                 	or	a
+   75 086e ed52               	sbc	hl, de
+   76 0870 7d                 	ld	a, l
+   77 0871 3226c0             	ld	(scrX), a
    78
    79                         	; ---- facing
-   80 07ff 3a11c0             	ld	a, (pad)
-   81 0802 e603               	and	PAD_LEFT | PAD_RIGHT
-   82 0804 280f               	jr	z, dm_out
-   83 0806 e602               	and	PAD_LEFT
-   84 0808 2807               	jr	z, dm_fr
-   85 080a 3e01               	ld	a, 1
-   86 080c 320ac0             	ld	(facing), a
-   87 080f 1804               	jr	dm_out
+   80 0874 3a11c0             	ld	a, (pad)
+   81 0877 e603               	and	PAD_LEFT | PAD_RIGHT
+   82 0879 280f               	jr	z, dm_out
+   83 087b e602               	and	PAD_LEFT
+   84 087d 2807               	jr	z, dm_fr
+   85 087f 3e01               	ld	a, 1
+   86 0881 320ac0             	ld	(facing), a
+   87 0884 1804               	jr	dm_out
    88                         dm_fr:
-   89 0811 af                 	xor	a
-   90 0812 320ac0             	ld	(facing), a
+   89 0886 af                 	xor	a
+   90 0887 320ac0             	ld	(facing), a
    91                         dm_out:
    92                         	; ---- write the three sprite attributes
-   93 0815 21003f             	ld	hl, VRAM_SAT
-   94 0818 cd0700             	call	VdpSetAddrW
-   95 081b 3a0dc0             	ld	a, (frameCur)
-   96 081e 47                 	ld	b, a
-   97 081f 87                 	add	a, a		; x2
-   98 0820 87                 	add	a, a		; x4
-   99 0821 4f                 	ld	c, a
-  100 0822 78                 	ld	a, b
-  101 0823 87                 	add	a, a		; x2
-  102 0824 81                 	add	a, c		; x6
-  103 0825 47                 	ld	b, a
-  104 0826 3a0ac0             	ld	a, (facing)
-  105 0829 b7                 	or	a
-  106 082a 2804               	jr	z, dm_g0
-  107 082c 3e03               	ld	a, 3
-  108 082e 80                 	add	a, b
-  109 082f 47                 	ld	b, a		; group base = frame*6 + facing*3
+   93 088a 21003f             	ld	hl, VRAM_SAT
+   94 088d cd0700             	call	VdpSetAddrW
+   95 0890 3a0dc0             	ld	a, (frameCur)
+   96 0893 47                 	ld	b, a
+   97 0894 87                 	add	a, a		; x2
+   98 0895 87                 	add	a, a		; x4
+   99 0896 4f                 	ld	c, a
+  100 0897 78                 	ld	a, b
+  101 0898 87                 	add	a, a		; x2
+  102 0899 81                 	add	a, c		; x6
+  103 089a 47                 	ld	b, a
+  104 089b 3a0ac0             	ld	a, (facing)
+  105 089e b7                 	or	a
+  106 089f 2804               	jr	z, dm_g0
+  107 08a1 3e03               	ld	a, 3
+  108 08a3 80                 	add	a, b
+  109 08a4 47                 	ld	b, a		; group base = frame*6 + facing*3
   110                         dm_g0:
-  111 0830 3a02c0             	ld	a, (py_lo)
-  112 0833 3d                 	dec	a
-  113 0834 3222c0             	ld	(tmp4), a		; SAT Y (TMS: screen y = Y+1)
-  114 0837 3a26c0             	ld	a, (scrX)
-  115 083a 3221c0             	ld	(tmp3), a		; SAT X
-  116 083d 0e00               	ld	c, 0		; layer
+  111 08a5 3a02c0             	ld	a, (py_lo)
+  112 08a8 3d                 	dec	a
+  113 08a9 3222c0             	ld	(tmp4), a		; SAT Y (TMS: screen y = Y+1)
+  114 08ac 3a26c0             	ld	a, (scrX)
+  115 08af 3221c0             	ld	(tmp3), a		; SAT X
+  116 08b2 0e00               	ld	c, 0		; layer
   117                         dm_l:
-  118 083f 3a22c0             	ld	a, (tmp4)
-  119 0842 d3be               	out	(VDP_DATA), a
-  120 0844 3a21c0             	ld	a, (tmp3)
-  121 0847 d3be               	out	(VDP_DATA), a
-  122 0849 78                 	ld	a, b
-  123 084a 81                 	add	a, c		; group
-  124 084b 87                 	add	a, a
-  125 084c 87                 	add	a, a		; pattern byte = group * 4
-  126 084d d3be               	out	(VDP_DATA), a
-  127 084f 59                 	ld	e, c
-  128 0850 1600               	ld	d, 0
-  129 0852 216008             	ld	hl, MarioCols
-  130 0855 19                 	add	hl, de
-  131 0856 7e                 	ld	a, (hl)
-  132 0857 d3be               	out	(VDP_DATA), a
-  133 0859 0c                 	inc	c
-  134 085a 79                 	ld	a, c
-  135 085b fe03               	cp	3
-  136 085d 20e0               	jr	nz, dm_l
+  118 08b4 3a22c0             	ld	a, (tmp4)
+  119 08b7 d3be               	out	(VDP_DATA), a
+  120 08b9 3a21c0             	ld	a, (tmp3)
+  121 08bc d3be               	out	(VDP_DATA), a
+  122 08be 78                 	ld	a, b
+  123 08bf 81                 	add	a, c		; group
+  124 08c0 87                 	add	a, a
+  125 08c1 87                 	add	a, a		; pattern byte = group * 4
+  126 08c2 d3be               	out	(VDP_DATA), a
+  127 08c4 59                 	ld	e, c
+  128 08c5 1600               	ld	d, 0
+  129 08c7 21d508             	ld	hl, MarioCols
+  130 08ca 19                 	add	hl, de
+  131 08cb 7e                 	ld	a, (hl)
+  132 08cc d3be               	out	(VDP_DATA), a
+  133 08ce 0c                 	inc	c
+  134 08cf 79                 	ld	a, c
+  135 08d0 fe03               	cp	3
+  136 08d2 20e0               	jr	nz, dm_l
   137                         	; ---- keep the remaining sprites hidden (written once at boot,
   138                         	;      but re-assert in case anything ever touches them)
-  139 085f c9                 	ret
+  139 08d4 c9                 	ret
   140
   141                         MarioCols:
-  142 0860 080b01             	.db MARIO_COL_RED, MARIO_COL_SKIN, MARIO_COL_DARK
+  142 08d5 080b01             	.db MARIO_COL_RED, MARIO_COL_SKIN, MARIO_COL_DARK
   143                        *END INCLUDE src/mario_draw.z80
   348                         .include "sound.z80"
     1                         ;=====================================================================
@@ -1410,182 +1464,182 @@
     7                         ;=====================================================================
     8
     9                         SndPlayJump:
-   10 0863 211a09             	ld	hl, SndJump
-   11 0866 2217c0             	ld	(sndPtr0), hl
-   12 0869 c9                 	ret
+   10 08d8 218f09             	ld	hl, SndJump
+   11 08db 2217c0             	ld	(sndPtr0), hl
+   12 08de c9                 	ret
    13
    14                         SndPlayCoin:
-   15 086a 213309             	ld	hl, SndCoin
-   16 086d 2219c0             	ld	(sndPtr1), hl
-   17 0870 c9                 	ret
+   15 08df 21a809             	ld	hl, SndCoin
+   16 08e2 2219c0             	ld	(sndPtr1), hl
+   17 08e5 c9                 	ret
    18
    19                         SndPlayBump:
-   20 0871 214c09             	ld	hl, SndBump
-   21 0874 221bc0             	ld	(sndPtr2), hl
-   22 0877 c9                 	ret
+   20 08e6 21c109             	ld	hl, SndBump
+   21 08e9 221bc0             	ld	(sndPtr2), hl
+   22 08ec c9                 	ret
    23
    24                         SndPlaySkid:
-   25 0878 215c09             	ld	hl, SndSkid
-   26 087b 221dc0             	ld	(sndPtr3), hl
-   27 087e c9                 	ret
+   25 08ed 21d109             	ld	hl, SndSkid
+   26 08f0 221dc0             	ld	(sndPtr3), hl
+   27 08f3 c9                 	ret
    28
    29                         ;=====================================================================
    30                         SoundUpdate:
    31                         	; ---- voice 0 (ch0 tone): jump
-   32 087f 2a17c0             	ld	hl, (sndPtr0)
-   33 0882 7c                 	ld	a, h
-   34 0883 b5                 	or	l
-   35 0884 281f               	jr	z, su1
-   36 0886 7e                 	ld	a, (hl)
-   37 0887 23                 	inc	hl
-   38 0888 b7                 	or	a
-   39 0889 280f               	jr	z, su0_stop
-   40 088b 4f                 	ld	c, a
+   32 08f4 2a17c0             	ld	hl, (sndPtr0)
+   33 08f7 7c                 	ld	a, h
+   34 08f8 b5                 	or	l
+   35 08f9 281f               	jr	z, su1
+   36 08fb 7e                 	ld	a, (hl)
+   37 08fc 23                 	inc	hl
+   38 08fd b7                 	or	a
+   39 08fe 280f               	jr	z, su0_stop
+   40 0900 4f                 	ld	c, a
    41                         su0_l:
-   42 088c 7e                 	ld	a, (hl)
-   43 088d d37f               	out	(PSG_PORT), a
-   44 088f 23                 	inc	hl
-   45 0890 0d                 	dec	c
-   46 0891 20f9               	jr	nz, su0_l
-   47 0893 eb                 	ex	de, hl
-   48 0894 ed5317c0           	ld	(sndPtr0), de
-   49 0898 180b               	jr	su1
+   42 0901 7e                 	ld	a, (hl)
+   43 0902 d37f               	out	(PSG_PORT), a
+   44 0904 23                 	inc	hl
+   45 0905 0d                 	dec	c
+   46 0906 20f9               	jr	nz, su0_l
+   47 0908 eb                 	ex	de, hl
+   48 0909 ed5317c0           	ld	(sndPtr0), de
+   49 090d 180b               	jr	su1
    50                         su0_stop:
-   51 089a af                 	xor	a
-   52 089b 3217c0             	ld	(sndPtr0), a
-   53 089e 3218c0             	ld	(sndPtr0 + 1), a
-   54 08a1 3e9f               	ld	a, $9F
-   55 08a3 d37f               	out	(PSG_PORT), a
+   51 090f af                 	xor	a
+   52 0910 3217c0             	ld	(sndPtr0), a
+   53 0913 3218c0             	ld	(sndPtr0 + 1), a
+   54 0916 3e9f               	ld	a, $9F
+   55 0918 d37f               	out	(PSG_PORT), a
    56
    57                         	; ---- voice 1 (ch1 tone): coin
    58                         su1:
-   59 08a5 2a19c0             	ld	hl, (sndPtr1)
-   60 08a8 7c                 	ld	a, h
-   61 08a9 b5                 	or	l
-   62 08aa 281f               	jr	z, su2
-   63 08ac 7e                 	ld	a, (hl)
-   64 08ad 23                 	inc	hl
-   65 08ae b7                 	or	a
-   66 08af 280f               	jr	z, su1_stop
-   67 08b1 4f                 	ld	c, a
+   59 091a 2a19c0             	ld	hl, (sndPtr1)
+   60 091d 7c                 	ld	a, h
+   61 091e b5                 	or	l
+   62 091f 281f               	jr	z, su2
+   63 0921 7e                 	ld	a, (hl)
+   64 0922 23                 	inc	hl
+   65 0923 b7                 	or	a
+   66 0924 280f               	jr	z, su1_stop
+   67 0926 4f                 	ld	c, a
    68                         su1_l:
-   69 08b2 7e                 	ld	a, (hl)
-   70 08b3 d37f               	out	(PSG_PORT), a
-   71 08b5 23                 	inc	hl
-   72 08b6 0d                 	dec	c
-   73 08b7 20f9               	jr	nz, su1_l
-   74 08b9 eb                 	ex	de, hl
-   75 08ba ed5319c0           	ld	(sndPtr1), de
-   76 08be 180b               	jr	su2
+   69 0927 7e                 	ld	a, (hl)
+   70 0928 d37f               	out	(PSG_PORT), a
+   71 092a 23                 	inc	hl
+   72 092b 0d                 	dec	c
+   73 092c 20f9               	jr	nz, su1_l
+   74 092e eb                 	ex	de, hl
+   75 092f ed5319c0           	ld	(sndPtr1), de
+   76 0933 180b               	jr	su2
    77                         su1_stop:
-   78 08c0 af                 	xor	a
-   79 08c1 3219c0             	ld	(sndPtr1), a
-   80 08c4 321ac0             	ld	(sndPtr1 + 1), a
-   81 08c7 3ebf               	ld	a, $BF
-   82 08c9 d37f               	out	(PSG_PORT), a
+   78 0935 af                 	xor	a
+   79 0936 3219c0             	ld	(sndPtr1), a
+   80 0939 321ac0             	ld	(sndPtr1 + 1), a
+   81 093c 3ebf               	ld	a, $BF
+   82 093e d37f               	out	(PSG_PORT), a
    83
    84                         	; ---- voice 2 (ch2 tone): bump
    85                         su2:
-   86 08cb 2a1bc0             	ld	hl, (sndPtr2)
-   87 08ce 7c                 	ld	a, h
-   88 08cf b5                 	or	l
-   89 08d0 281f               	jr	z, su3
-   90 08d2 7e                 	ld	a, (hl)
-   91 08d3 23                 	inc	hl
-   92 08d4 b7                 	or	a
-   93 08d5 280f               	jr	z, su2_stop
-   94 08d7 4f                 	ld	c, a
+   86 0940 2a1bc0             	ld	hl, (sndPtr2)
+   87 0943 7c                 	ld	a, h
+   88 0944 b5                 	or	l
+   89 0945 281f               	jr	z, su3
+   90 0947 7e                 	ld	a, (hl)
+   91 0948 23                 	inc	hl
+   92 0949 b7                 	or	a
+   93 094a 280f               	jr	z, su2_stop
+   94 094c 4f                 	ld	c, a
    95                         su2_l:
-   96 08d8 7e                 	ld	a, (hl)
-   97 08d9 d37f               	out	(PSG_PORT), a
-   98 08db 23                 	inc	hl
-   99 08dc 0d                 	dec	c
-  100 08dd 20f9               	jr	nz, su2_l
-  101 08df eb                 	ex	de, hl
-  102 08e0 ed531bc0           	ld	(sndPtr2), de
-  103 08e4 180b               	jr	su3
+   96 094d 7e                 	ld	a, (hl)
+   97 094e d37f               	out	(PSG_PORT), a
+   98 0950 23                 	inc	hl
+   99 0951 0d                 	dec	c
+  100 0952 20f9               	jr	nz, su2_l
+  101 0954 eb                 	ex	de, hl
+  102 0955 ed531bc0           	ld	(sndPtr2), de
+  103 0959 180b               	jr	su3
   104                         su2_stop:
-  105 08e6 af                 	xor	a
-  106 08e7 321bc0             	ld	(sndPtr2), a
-  107 08ea 321cc0             	ld	(sndPtr2 + 1), a
-  108 08ed 3edf               	ld	a, $DF
-  109 08ef d37f               	out	(PSG_PORT), a
+  105 095b af                 	xor	a
+  106 095c 321bc0             	ld	(sndPtr2), a
+  107 095f 321cc0             	ld	(sndPtr2 + 1), a
+  108 0962 3edf               	ld	a, $DF
+  109 0964 d37f               	out	(PSG_PORT), a
   110
   111                         	; ---- voice 3 (ch3 noise): skid
   112                         su3:
-  113 08f1 2a1dc0             	ld	hl, (sndPtr3)
-  114 08f4 7c                 	ld	a, h
-  115 08f5 b5                 	or	l
-  116 08f6 c8                 	ret	z
-  117 08f7 7e                 	ld	a, (hl)
-  118 08f8 23                 	inc	hl
-  119 08f9 b7                 	or	a
-  120 08fa 280e               	jr	z, su3_stop
-  121 08fc 4f                 	ld	c, a
+  113 0966 2a1dc0             	ld	hl, (sndPtr3)
+  114 0969 7c                 	ld	a, h
+  115 096a b5                 	or	l
+  116 096b c8                 	ret	z
+  117 096c 7e                 	ld	a, (hl)
+  118 096d 23                 	inc	hl
+  119 096e b7                 	or	a
+  120 096f 280e               	jr	z, su3_stop
+  121 0971 4f                 	ld	c, a
   122                         su3_l:
-  123 08fd 7e                 	ld	a, (hl)
-  124 08fe d37f               	out	(PSG_PORT), a
-  125 0900 23                 	inc	hl
-  126 0901 0d                 	dec	c
-  127 0902 20f9               	jr	nz, su3_l
-  128 0904 eb                 	ex	de, hl
-  129 0905 ed531dc0           	ld	(sndPtr3), de
-  130 0909 c9                 	ret
+  123 0972 7e                 	ld	a, (hl)
+  124 0973 d37f               	out	(PSG_PORT), a
+  125 0975 23                 	inc	hl
+  126 0976 0d                 	dec	c
+  127 0977 20f9               	jr	nz, su3_l
+  128 0979 eb                 	ex	de, hl
+  129 097a ed531dc0           	ld	(sndPtr3), de
+  130 097e c9                 	ret
   131                         su3_stop:
-  132 090a af                 	xor	a
-  133 090b 321dc0             	ld	(sndPtr3), a
-  134 090e 321ec0             	ld	(sndPtr3 + 1), a
-  135 0911 3eff               	ld	a, $FF
-  136 0913 d37f               	out	(PSG_PORT), a
-  137 0915 c9                 	ret
+  132 097f af                 	xor	a
+  133 0980 321dc0             	ld	(sndPtr3), a
+  134 0983 321ec0             	ld	(sndPtr3 + 1), a
+  135 0986 3eff               	ld	a, $FF
+  136 0988 d37f               	out	(PSG_PORT), a
+  137 098a c9                 	ret
   138
   139                         ;=====================================================================
   140                         ; effect streams (original envelope designs)
   141                         ;=====================================================================
   142                         PsgMute:
-  143 0916 9fbfdfff           	.db $9F, $BF, $DF, $FF
+  143 098b 9fbfdfff           	.db $9F, $BF, $DF, $FF
   144
   145                         ; jump: quick rising chirp on channel 0
   146                         SndJump:
-  147 091a 03908030           	.db 3, $90, $80, $30
-  148 091e 028028             	.db 2, $80, $28
-  149 0921 028020             	.db 2, $80, $20
-  150 0924 028018             	.db 2, $80, $18
-  151 0927 028010             	.db 2, $80, $10
-  152 092a 02800c             	.db 2, $80, $0C
-  153 092d 028008             	.db 2, $80, $08
-  154 0930 019f               	.db 1, $9F
-  155 0932 00                 	.db 0
+  147 098f 03908030           	.db 3, $90, $80, $30
+  148 0993 028028             	.db 2, $80, $28
+  149 0996 028020             	.db 2, $80, $20
+  150 0999 028018             	.db 2, $80, $18
+  151 099c 028010             	.db 2, $80, $10
+  152 099f 02800c             	.db 2, $80, $0C
+  153 09a2 028008             	.db 2, $80, $08
+  154 09a5 019f               	.db 1, $9F
+  155 09a7 00                 	.db 0
   156
   157                         ; coin: two-note blip on channel 1
   158                         SndCoin:
-  159 0933 03b0a00a           	.db 3, $B0, $A0, $0A
-  160 0937 02a00a             	.db 2, $A0, $0A
-  161 093a 02a00a             	.db 2, $A0, $0A
-  162 093d 02a00a             	.db 2, $A0, $0A
-  163 0940 02a006             	.db 2, $A0, $06
-  164 0943 02a006             	.db 2, $A0, $06
-  165 0946 02a006             	.db 2, $A0, $06
-  166 0949 01bf               	.db 1, $BF
-  167 094b 00                 	.db 0
+  159 09a8 03b0a00a           	.db 3, $B0, $A0, $0A
+  160 09ac 02a00a             	.db 2, $A0, $0A
+  161 09af 02a00a             	.db 2, $A0, $0A
+  162 09b2 02a00a             	.db 2, $A0, $0A
+  163 09b5 02a006             	.db 2, $A0, $06
+  164 09b8 02a006             	.db 2, $A0, $06
+  165 09bb 02a006             	.db 2, $A0, $06
+  166 09be 01bf               	.db 1, $BF
+  167 09c0 00                 	.db 0
   168
   169                         ; bump: short low thud on channel 2
   170                         SndBump:
-  171 094c 03d0c03c           	.db 3, $D0, $C0, $3C
-  172 0950 02c03c             	.db 2, $C0, $3C
-  173 0953 02c03c             	.db 2, $C0, $3C
-  174 0956 02c03c             	.db 2, $C0, $3C
-  175 0959 01df               	.db 1, $DF
-  176 095b 00                 	.db 0
+  171 09c1 03d0c03c           	.db 3, $D0, $C0, $3C
+  172 09c5 02c03c             	.db 2, $C0, $3C
+  173 09c8 02c03c             	.db 2, $C0, $3C
+  174 09cb 02c03c             	.db 2, $C0, $3C
+  175 09ce 01df               	.db 1, $DF
+  176 09d0 00                 	.db 0
   177
   178                         ; skid: raspy noise burst on channel 3
   179                         SndSkid:
-  180 095c 02f004             	.db 2, $F0, $04
-  181 095f 01f0               	.db 1, $F0
-  182 0961 01f0               	.db 1, $F0
-  183 0963 01f0               	.db 1, $F0
-  184 0965 01ff               	.db 1, $FF
-  185 0967 00                 	.db 0
+  180 09d1 02f004             	.db 2, $F0, $04
+  181 09d4 01f0               	.db 1, $F0
+  182 09d6 01f0               	.db 1, $F0
+  183 09d8 01f0               	.db 1, $F0
+  184 09da 01ff               	.db 1, $FF
+  185 09dc 00                 	.db 0
   186                        *END INCLUDE src/sound.z80
   349
   350                         ;=====================================================================
@@ -2653,95 +2707,98 @@ ph_nojump            02b3
 ph_g1                02cf
 ph_g2                02dd
 ph_nograv            02e0
-pc_hi                0305
-pc1                  0316
-ph_sk1               032a
-ApplyXVel            032f
-axv1                 0354
-ApplyYVel            0364
-ayv1                 0389
-ColOfPx              0399
-RowOfPy              03ab
-SolidAt              03bd
-CollideX             03cf
-cx_hitR              0403
-cx_hr1               0414
-cx_left              041f
-cx_hitL              044a
-CollideY             0460
-cy_land              0495
-cy_up                04b2
-cy_bump              04de
-cy_q                 0523
-cy_bs                0534
-GroundProbe          0538
-gp_yes               0576
-CoinCheck            057c
-CC1                  059a
-PitCheck             05b7
-AccelMain            05e8
-AccelPseudo          05f0
-SpeedJumpInc         05f8
-WalkTickMax          05fc
-SolidTab             0605
-WalkCycle            0615
-RunCycle             0619
-TileAt               061d
-ta_l                 0620
-ta_n                 0634
-ta_rom               0639
-OvlSet               064e
-os_l                 0651
-os_n                 0663
-os_add               0668
-RedrawWindow         0674
-rw_row               0690
-rw_x                 06a7
-RedrawOvl            06c4
-ro_l                 06c7
-ro_next              070c
-OvlSetPoke           070f
-osp_out              0747
-CameraUpdate         074a
-cu_pos               075a
-cu_max               0765
-cu_ok                0768
-cu_redraw            0788
-DrawMario            0795
-dm_run               07b0
-dm_cyc               07b3
-dm_fjump             07bf
-dm_fskid             07c3
-dm_fstand            07c7
-dm_set               07c9
-dm_t1                07db
-dm_sat               07f1
-dm_fr                0811
-dm_out               0815
-dm_g0                0830
-dm_l                 083f
-MarioCols            0860
-SndPlayJump          0863
-SndPlayCoin          086a
-SndPlayBump          0871
-SndPlaySkid          0878
-SoundUpdate          087f
-su0_l                088c
-su0_stop             089a
-su1                  08a5
-su1_l                08b2
-su1_stop             08c0
-su2                  08cb
-su2_l                08d8
-su2_stop             08e6
-su3                  08f1
-su3_l                08fd
-su3_stop             090a
-PsgMute              0916
-SndJump              091a
-SndCoin              0933
-SndBump              094c
-SndSkid              095c
+pxp_pos              02f9
+pxp_ok               030e
+py_ok                0328
+pc_hi                0344
+pc1                  0355
+ph_sk1               0369
+ApplyXVel            036e
+axv1                 0393
+ApplyYVel            03a3
+ayv1                 03c8
+ColOfPx              03d8
+RowOfPy              03ea
+SolidAt              03fc
+CollideX             040e
+cx_hitR              0442
+cx_hr1               0456
+cx_left              0460
+cx_hitL              048b
+CollideY             04a2
+cy_land              04e8
+cy_up                0505
+cy_bump              0542
+cy_q                 0587
+cy_bs                0598
+GroundProbe          059c
+gp_yes               05eb
+CoinCheck            05f1
+CC1                  060f
+PitCheck             062c
+AccelMain            065d
+AccelPseudo          0665
+SpeedJumpInc         066d
+WalkTickMax          0671
+SolidTab             067a
+WalkCycle            068a
+RunCycle             068e
+TileAt               0692
+ta_l                 0695
+ta_n                 06a9
+ta_rom               06ae
+OvlSet               06c3
+os_l                 06c6
+os_n                 06d8
+os_add               06dd
+RedrawWindow         06e9
+rw_row               0705
+rw_x                 071c
+RedrawOvl            0739
+ro_l                 073c
+ro_next              0781
+OvlSetPoke           0784
+osp_out              07bc
+CameraUpdate         07bf
+cu_pos               07cf
+cu_max               07da
+cu_ok                07dd
+cu_redraw            07fd
+DrawMario            080a
+dm_run               0825
+dm_cyc               0828
+dm_fjump             0834
+dm_fskid             0838
+dm_fstand            083c
+dm_set               083e
+dm_t1                0850
+dm_sat               0866
+dm_fr                0886
+dm_out               088a
+dm_g0                08a5
+dm_l                 08b4
+MarioCols            08d5
+SndPlayJump          08d8
+SndPlayCoin          08df
+SndPlayBump          08e6
+SndPlaySkid          08ed
+SoundUpdate          08f4
+su0_l                0901
+su0_stop             090f
+su1                  091a
+su1_l                0927
+su1_stop             0935
+su2                  0940
+su2_l                094d
+su2_stop             095b
+su3                  0966
+su3_l                0972
+su3_stop             097f
+PsgMute              098b
+SndJump              098f
+SndCoin              09a8
+SndBump              09c1
+SndSkid              09d1
 TILE_N               0010
 TilePatternsSec      5000
 TileColorsSec        5080
