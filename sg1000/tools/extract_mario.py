@@ -10,11 +10,11 @@ sprites whose OAM pattern bytes are (p, p+2).  Inside the CHR page the four
 8x8 tiles of the 16x16 frame sit at page positions p-1 (top-left), p (bottom-left),
 p+1 (top-right), p+2 (bottom-right).
 
-PCX grey levels encode the NES colour index:
-   0   -> transparent
-   255 -> colour 1 (red   : NES $16)
-   170 -> colour 2 (skin  : NES $36)
-   85  -> colour 3 (dark  : NES $0F)
+PCX grey levels encode the NES colour index (index * 85):
+   0   -> colour 0 (transparent)
+   85  -> colour 1 (red   : NES $16)  hat/shirt/overalls
+   170 -> colour 2 (skin  : NES $36)  face/hands
+   255 -> colour 3 (dark  : NES $0F)  outline/hair/eyes/straps/soles
 """
 import os
 import sys
@@ -23,7 +23,7 @@ from PIL import Image
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PAGE = 83  # chr083.pcx == VROM page $53 (small Mario, page offset 3)
 
-GREY2IDX = {0: 0, 85: 3, 170: 2, 255: 1}
+GREY2IDX = {0: 0, 85: 1, 170: 2, 255: 3}
 
 # frame name -> OAM pattern byte of the left 8x16 sprite (PRG029 SPPF_Table)
 FRAMES = [
