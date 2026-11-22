@@ -94,253 +94,255 @@
    94                         tmp3:		.equ $C021
    95                         tmp4:		.equ $C022
    96                         ovlEnd:		.equ $C023	; 2 bytes: terminator slot
-   97                         frameCnt:	.equ $C025
-   98                         scrX:		.equ $C026
-   99                         skidNow:		.equ $C027
-  100                         OVL_BASE:	.equ $C040	; 48 slots x 3 bytes
-  101                         STACK_TOP:	.equ $C3FC
-  102
-  103                         ;=====================================================================
-  104                         	.org $0000
-  105 0000 f3                 	di
-  106 0001 31fcc3             	ld	sp, STACK_TOP
-  107 0004 c32700             	jp	Boot
-  108
-  109                         ;=====================================================================
-  110                         ; VDP helpers
+   97                         paP:		.equ $C02D	; 2 bytes: RedrawWindow row address cursor
+   98                         rwBase:		.equ $C031	; 2 bytes: LevelData + camcol*24
+   99                         frameCnt:	.equ $C02F	; 2 bytes: diagnostic only (was $C025, overlapped scrX)
+  100                         scrX:		.equ $C026
+  101                         skidNow:		.equ $C027
+  102                         OVL_BASE:	.equ $C040	; 48 slots x 3 bytes
+  103                         STACK_TOP:	.equ $C3FC
+  104
+  105                         ;=====================================================================
+  106                         	.org $0000
+  107 0000 f3                 	di
+  108 0001 31fcc3             	ld	sp, STACK_TOP
+  109 0004 c32700             	jp	Boot
+  110
   111                         ;=====================================================================
-  112                         VdpSetAddrW:				; hl = VRAM write address
-  113 0007 7d                 	ld	a, l
-  114 0008 d3bf               	out	(VDP_CTRL), a
-  115 000a 7c                 	ld	a, h
-  116 000b f640               	or	$40
-  117 000d d3bf               	out	(VDP_CTRL), a
-  118 000f c9                 	ret
-  119
-  120                         ; b = register, a = value
-  121                         VdpReg:
-  122 0010 d3bf               	out	(VDP_CTRL), a
-  123 0012 78                 	ld	a, b
-  124 0013 f680               	or	$80
-  125 0015 d3bf               	out	(VDP_CTRL), a
-  126 0017 c9                 	ret
-  127
-  128                         ; hl = source, de = VRAM dest, bc = count
-  129                         VdpUpload:
-  130 0018 eb                 	ex	de, hl
-  131 0019 cd0700             	call	VdpSetAddrW
-  132 001c eb                 	ex	de, hl
-  133                         up_l:
-  134 001d 7e                 	ld	a, (hl)
-  135 001e d3be               	out	(VDP_DATA), a
-  136 0020 23                 	inc	hl
-  137 0021 0b                 	dec	bc
-  138 0022 78                 	ld	a, b
-  139 0023 b1                 	or	c
-  140 0024 20f7               	jr	nz, up_l
-  141 0026 c9                 	ret
-  142
-  143                         ;=====================================================================
-  144                         Boot:
-  145 0027 0600               	ld	b, 0			; R0 = $02 : M3 -> Graphics II
-  146 0029 3e02               	ld	a, $02
-  147 002b cd1000             	call	VdpReg
-  148 002e 0601               	ld	b, 1			; R1: 16K, display on, 16x16 sprites
-  149 0030 3ee2               	ld	a, $E2
-  150 0032 cd1000             	call	VdpReg
-  151 0035 0602               	ld	b, 2			; R2: PNT @ $1800
-  152 0037 3e06               	ld	a, $06
-  153 0039 cd1000             	call	VdpReg
-  154 003c 0603               	ld	b, 3			; R3: CT @ $2000
-  155 003e 3eff               	ld	a, $FF
-  156 0040 cd1000             	call	VdpReg
-  157 0043 0604               	ld	b, 4			; R4: PGT @ $0000
-  158 0045 af                 	xor	a
-  159 0046 cd1000             	call	VdpReg
-  160 0049 0605               	ld	b, 5			; R5: SAT @ $3F00
-  161 004b 3e7e               	ld	a, $7E
-  162 004d cd1000             	call	VdpReg
-  163 0050 0606               	ld	b, 6			; R6: sprite PG @ $3800
-  164 0052 3e07               	ld	a, $07
-  165 0054 cd1000             	call	VdpReg
-  166 0057 0607               	ld	b, 7			; R7: backdrop = light blue
-  167 0059 3e55               	ld	a, $55
-  168 005b cd1000             	call	VdpReg
-  169
-  170                         	; ---- background tiles: the used tiles into each of the three
-  171                         	;      Graphics II sections (PGT and CT)
-  172 005e 0600               	ld	b, 0
-  173                         tile_sec:
-  174 0060 c5                 	push	bc
-  175 0061 78                 	ld	a, b
-  176 0062 87                 	add	a, a
-  177 0063 87                 	add	a, a
-  178 0064 87                 	add	a, a		; high byte of section offset (2048*b)
-  179 0065 321fc0             	ld	(tmp1), a
-  180 0068 210050             	ld	hl, TilePatternsSec
-  181 006b 3a1fc0             	ld	a, (tmp1)
-  182 006e 57                 	ld	d, a
-  183 006f 1e00               	ld	e, 0			; VRAM_PGT + offset
-  184 0071 018000             	ld	bc, 128
-  185 0074 cd1800             	call	VdpUpload
-  186 0077 218050             	ld	hl, TileColorsSec
-  187 007a 3a1fc0             	ld	a, (tmp1)
-  188 007d c620               	add	a, $20		; VRAM_CT + offset
-  189 007f 57                 	ld	d, a
-  190 0080 1e00               	ld	e, 0
-  191 0082 018000             	ld	bc, 128
-  192 0085 cd1800             	call	VdpUpload
-  193 0088 c1                 	pop	bc
-  194 0089 04                 	inc	b
-  195 008a 78                 	ld	a, b
-  196 008b fe03               	cp	3
-  197 008d 20d1               	jr	nz, tile_sec
-  198
-  199                         	; ---- clear name table
-  200 008f 210018             	ld	hl, VRAM_PNT
-  201 0092 cd0700             	call	VdpSetAddrW
-  202 0095 010003             	ld	bc, 768
-  203 0098 1600               	ld	d, 0
-  204                         pnt_clear:
-  205 009a 7a                 	ld	a, d
-  206 009b d3be               	out	(VDP_DATA), a
-  207 009d 0b                 	dec	bc
-  208 009e 78                 	ld	a, b
-  209 009f b1                 	or	c
-  210 00a0 20f8               	jr	nz, pnt_clear
-  211
-  212                         	; ---- Mario sprite patterns
-  213 00a2 210051             	ld	hl, MarioPatterns
-  214 00a5 110038             	ld	de, VRAM_SPAT
-  215 00a8 018004             	ld	bc, 36 * 32
-  216 00ab cd1800             	call	VdpUpload
-  217
-  218                         	; ---- hide all sprites
-  219 00ae 21003f             	ld	hl, VRAM_SAT
-  220 00b1 cd0700             	call	VdpSetAddrW
-  221 00b4 0620               	ld	b, 32
-  222                         sat_clear:
-  223 00b6 3ed0               	ld	a, $D0
-  224 00b8 d3be               	out	(VDP_DATA), a
-  225 00ba af                 	xor	a
-  226 00bb d3be               	out	(VDP_DATA), a
-  227 00bd d3be               	out	(VDP_DATA), a
-  228 00bf d3be               	out	(VDP_DATA), a
-  229 00c1 10f3               	djnz	sat_clear
-  230
-  231                         	; ---- PSG mute
-  232 00c3 21ce08             	ld	hl, PsgMute
-  233 00c6 0604               	ld	b, 4
-  234                         psg_m:
-  235 00c8 7e                 	ld	a, (hl)
-  236 00c9 d37f               	out	(PSG_PORT), a
-  237 00cb 23                 	inc	hl
-  238 00cc 10fa               	djnz	psg_m
-  239
-  240                         	; ---- game state
-  241 00ce 212000             	ld	hl, 32
-  242 00d1 2200c0             	ld	(px_lo), hl
-  243 00d4 21a000             	ld	hl, 160
-  244 00d7 2202c0             	ld	(py_lo), hl
-  245 00da af                 	xor	a
-  246 00db 3204c0             	ld	(xvel), a
-  247 00de 3205c0             	ld	(xfrac), a
-  248 00e1 3206c0             	ld	(yvel), a
-  249 00e4 3207c0             	ld	(yfrac), a
-  250 00e7 3208c0             	ld	(inair), a
-  251 00ea 3211c0             	ld	(pad), a
-  252 00ed 3212c0             	ld	(padPrev), a
-  253 00f0 3214c0             	ld	(wiggly), a
-  254 00f3 320bc0             	ld	(animTick), a
-  255 00f6 320cc0             	ld	(animIdx), a
-  256 00f9 3216c0             	ld	(coinCount), a
-  257 00fc 3225c0             	ld	(frameCnt), a
-  258 00ff 3215c0             	ld	(skidOld), a
-  259 0102 3227c0             	ld	(skidNow), a
-  260 0105 3c                 	inc	a
-  261 0106 3209c0             	ld	(onGround), a
-  262 0109 21ffff             	ld	hl, $FFFF
-  263 010c 220dc0             	ld	(frameCur), hl		; frameCur and tileColCur = $FF
-  264 010f 2140c0             	ld	hl, OVL_BASE
-  265 0112 2223c0             	ld	(ovlEnd), hl
-  266 0115 36ff               	ld	(hl), $FF
-  267 0117 af                 	xor	a
-  268 0118 3217c0             	ld	(sndPtr0), a
-  269 011b 3218c0             	ld	(sndPtr0 + 1), a
-  270 011e 3219c0             	ld	(sndPtr1), a
-  271 0121 321ac0             	ld	(sndPtr1 + 1), a
-  272 0124 321bc0             	ld	(sndPtr2), a
-  273 0127 321cc0             	ld	(sndPtr2 + 1), a
-  274 012a 321dc0             	ld	(sndPtr3), a
-  275 012d 321ec0             	ld	(sndPtr3 + 1), a
-  276
-  277 0130 cda406             	call	CameraUpdate		; draws the first screen
+  112                         ; VDP helpers
+  113                         ;=====================================================================
+  114                         VdpSetAddrW:				; hl = VRAM write address
+  115 0007 7d                 	ld	a, l
+  116 0008 d3bf               	out	(VDP_CTRL), a
+  117 000a 7c                 	ld	a, h
+  118 000b f640               	or	$40
+  119 000d d3bf               	out	(VDP_CTRL), a
+  120 000f c9                 	ret
+  121
+  122                         ; b = register, a = value
+  123                         VdpReg:
+  124 0010 d3bf               	out	(VDP_CTRL), a
+  125 0012 78                 	ld	a, b
+  126 0013 f680               	or	$80
+  127 0015 d3bf               	out	(VDP_CTRL), a
+  128 0017 c9                 	ret
+  129
+  130                         ; hl = source, de = VRAM dest, bc = count
+  131                         VdpUpload:
+  132 0018 eb                 	ex	de, hl
+  133 0019 cd0700             	call	VdpSetAddrW
+  134 001c eb                 	ex	de, hl
+  135                         up_l:
+  136 001d 7e                 	ld	a, (hl)
+  137 001e d3be               	out	(VDP_DATA), a
+  138 0020 23                 	inc	hl
+  139 0021 0b                 	dec	bc
+  140 0022 78                 	ld	a, b
+  141 0023 b1                 	or	c
+  142 0024 20f7               	jr	nz, up_l
+  143 0026 c9                 	ret
+  144
+  145                         ;=====================================================================
+  146                         Boot:
+  147 0027 0600               	ld	b, 0			; R0 = $02 : M3 -> Graphics II
+  148 0029 3e02               	ld	a, $02
+  149 002b cd1000             	call	VdpReg
+  150 002e 0601               	ld	b, 1			; R1: 16K, display on, 16x16 sprites
+  151 0030 3ee2               	ld	a, $E2
+  152 0032 cd1000             	call	VdpReg
+  153 0035 0602               	ld	b, 2			; R2: PNT @ $1800
+  154 0037 3e06               	ld	a, $06
+  155 0039 cd1000             	call	VdpReg
+  156 003c 0603               	ld	b, 3			; R3: CT @ $2000
+  157 003e 3eff               	ld	a, $FF
+  158 0040 cd1000             	call	VdpReg
+  159 0043 0604               	ld	b, 4			; R4: PGT @ $0000
+  160 0045 af                 	xor	a
+  161 0046 cd1000             	call	VdpReg
+  162 0049 0605               	ld	b, 5			; R5: SAT @ $3F00
+  163 004b 3e7e               	ld	a, $7E
+  164 004d cd1000             	call	VdpReg
+  165 0050 0606               	ld	b, 6			; R6: sprite PG @ $3800
+  166 0052 3e07               	ld	a, $07
+  167 0054 cd1000             	call	VdpReg
+  168 0057 0607               	ld	b, 7			; R7: backdrop = light blue
+  169 0059 3e55               	ld	a, $55
+  170 005b cd1000             	call	VdpReg
+  171
+  172                         	; ---- background tiles: the used tiles into each of the three
+  173                         	;      Graphics II sections (PGT and CT)
+  174 005e 0600               	ld	b, 0
+  175                         tile_sec:
+  176 0060 c5                 	push	bc
+  177 0061 78                 	ld	a, b
+  178 0062 87                 	add	a, a
+  179 0063 87                 	add	a, a
+  180 0064 87                 	add	a, a		; high byte of section offset (2048*b)
+  181 0065 321fc0             	ld	(tmp1), a
+  182 0068 210050             	ld	hl, TilePatternsSec
+  183 006b 3a1fc0             	ld	a, (tmp1)
+  184 006e 57                 	ld	d, a
+  185 006f 1e00               	ld	e, 0			; VRAM_PGT + offset
+  186 0071 018000             	ld	bc, 128
+  187 0074 cd1800             	call	VdpUpload
+  188 0077 218050             	ld	hl, TileColorsSec
+  189 007a 3a1fc0             	ld	a, (tmp1)
+  190 007d c620               	add	a, $20		; VRAM_CT + offset
+  191 007f 57                 	ld	d, a
+  192 0080 1e00               	ld	e, 0
+  193 0082 018000             	ld	bc, 128
+  194 0085 cd1800             	call	VdpUpload
+  195 0088 c1                 	pop	bc
+  196 0089 04                 	inc	b
+  197 008a 78                 	ld	a, b
+  198 008b fe03               	cp	3
+  199 008d 20d1               	jr	nz, tile_sec
+  200
+  201                         	; ---- clear name table
+  202 008f 210018             	ld	hl, VRAM_PNT
+  203 0092 cd0700             	call	VdpSetAddrW
+  204 0095 010003             	ld	bc, 768
+  205 0098 1600               	ld	d, 0
+  206                         pnt_clear:
+  207 009a 7a                 	ld	a, d
+  208 009b d3be               	out	(VDP_DATA), a
+  209 009d 0b                 	dec	bc
+  210 009e 78                 	ld	a, b
+  211 009f b1                 	or	c
+  212 00a0 20f8               	jr	nz, pnt_clear
+  213
+  214                         	; ---- Mario sprite patterns
+  215 00a2 210051             	ld	hl, MarioPatterns
+  216 00a5 110038             	ld	de, VRAM_SPAT
+  217 00a8 018004             	ld	bc, 36 * 32
+  218 00ab cd1800             	call	VdpUpload
+  219
+  220                         	; ---- hide all sprites
+  221 00ae 21003f             	ld	hl, VRAM_SAT
+  222 00b1 cd0700             	call	VdpSetAddrW
+  223 00b4 0620               	ld	b, 32
+  224                         sat_clear:
+  225 00b6 3ed0               	ld	a, $D0
+  226 00b8 d3be               	out	(VDP_DATA), a
+  227 00ba af                 	xor	a
+  228 00bb d3be               	out	(VDP_DATA), a
+  229 00bd d3be               	out	(VDP_DATA), a
+  230 00bf d3be               	out	(VDP_DATA), a
+  231 00c1 10f3               	djnz	sat_clear
+  232
+  233                         	; ---- PSG mute
+  234 00c3 211609             	ld	hl, PsgMute
+  235 00c6 0604               	ld	b, 4
+  236                         psg_m:
+  237 00c8 7e                 	ld	a, (hl)
+  238 00c9 d37f               	out	(PSG_PORT), a
+  239 00cb 23                 	inc	hl
+  240 00cc 10fa               	djnz	psg_m
+  241
+  242                         	; ---- game state
+  243 00ce 212000             	ld	hl, 32
+  244 00d1 2200c0             	ld	(px_lo), hl
+  245 00d4 21a000             	ld	hl, 160
+  246 00d7 2202c0             	ld	(py_lo), hl
+  247 00da af                 	xor	a
+  248 00db 3204c0             	ld	(xvel), a
+  249 00de 3205c0             	ld	(xfrac), a
+  250 00e1 3206c0             	ld	(yvel), a
+  251 00e4 3207c0             	ld	(yfrac), a
+  252 00e7 3208c0             	ld	(inair), a
+  253 00ea 3211c0             	ld	(pad), a
+  254 00ed 3212c0             	ld	(padPrev), a
+  255 00f0 3214c0             	ld	(wiggly), a
+  256 00f3 320bc0             	ld	(animTick), a
+  257 00f6 320cc0             	ld	(animIdx), a
+  258 00f9 3216c0             	ld	(coinCount), a
+  259 00fc 322fc0             	ld	(frameCnt), a
+  260 00ff 3215c0             	ld	(skidOld), a
+  261 0102 3227c0             	ld	(skidNow), a
+  262 0105 3c                 	inc	a
+  263 0106 3209c0             	ld	(onGround), a
+  264 0109 21ffff             	ld	hl, $FFFF
+  265 010c 220dc0             	ld	(frameCur), hl		; frameCur and tileColCur = $FF
+  266 010f 2140c0             	ld	hl, OVL_BASE
+  267 0112 2223c0             	ld	(ovlEnd), hl
+  268 0115 36ff               	ld	(hl), $FF
+  269 0117 af                 	xor	a
+  270 0118 3217c0             	ld	(sndPtr0), a
+  271 011b 3218c0             	ld	(sndPtr0 + 1), a
+  272 011e 3219c0             	ld	(sndPtr1), a
+  273 0121 321ac0             	ld	(sndPtr1 + 1), a
+  274 0124 321bc0             	ld	(sndPtr2), a
+  275 0127 321cc0             	ld	(sndPtr2 + 1), a
+  276 012a 321dc0             	ld	(sndPtr3), a
+  277 012d 321ec0             	ld	(sndPtr3 + 1), a
   278
-  279                         ;=====================================================================
-  280                         MainLoop:
-  281 0133 cd4801             	call	WaitVBlank
-  282 0136 cd5501             	call	ReadPad
-  283 0139 cd8b01             	call	PlayerPhysics
-  284 013c cda406             	call	CameraUpdate
-  285 013f cd4d07             	call	DrawMario
-  286 0142 cd3708             	call	SoundUpdate
-  287 0145 c33301             	jp	MainLoop
-  288
-  289                         ;=====================================================================
-  290                         WaitVBlank:
-  291                         waitvb:
-  292 0148 dbbf               	in	a, (VDP_CTRL)
-  293 014a 87                 	add	a, a
-  294 014b 30fb               	jr	nc, waitvb
-  295 014d 2a25c0             	ld	hl, (frameCnt)
-  296 0150 23                 	inc	hl
-  297 0151 2225c0             	ld	(frameCnt), hl
-  298 0154 c9                 	ret
-  299
-  300                         ;=====================================================================
-  301                         ReadPad:
-  302 0155 dbc0               	in	a, (PAD_PORT)
-  303 0157 2f                 	cpl
-  304 0158 47                 	ld	b, a
-  305 0159 af                 	xor	a
-  306 015a cb58               	bit	3, b
-  307 015c 2802               	jr	z, rp1
-  308 015e f601               	or	PAD_RIGHT
-  309                         rp1:
-  310 0160 cb50               	bit	2, b
-  311 0162 2802               	jr	z, rp2
-  312 0164 f602               	or	PAD_LEFT
-  313                         rp2:
-  314 0166 cb60               	bit	4, b
-  315 0168 2802               	jr	z, rp3
-  316 016a f604               	or	PAD_A
-  317                         rp3:
-  318 016c cb68               	bit	5, b
-  319 016e 2802               	jr	z, rp4
-  320 0170 f608               	or	PAD_B
-  321                         rp4:
-  322 0172 3211c0             	ld	(pad), a
-  323 0175 2112c0             	ld	hl, padPrev
-  324 0178 4e                 	ld	c, (hl)
-  325 0179 77                 	ld	(hl), a
-  326 017a 47                 	ld	b, a
-  327 017b 79                 	ld	a, c
-  328 017c 2f                 	cpl
-  329 017d a0                 	and	b
-  330 017e 3213c0             	ld	(padEdge), a
-  331 0181 c9                 	ret
-  332
-  333                         ;=====================================================================
-  334                         ; |xvel| in a (Z set when zero)
-  335                         AbsXVel:
-  336 0182 3a04c0             	ld	a, (xvel)
-  337 0185 cb7f               	bit	7, a
-  338 0187 c8                 	ret	z
-  339 0188 ed44               	neg
-  340 018a c9                 	ret
-  341
-  342                         ;=====================================================================
-  343                         .include "physics.z80"
+  279 0130 cd4a07             	call	CameraUpdate		; draws the first screen
+  280
+  281                         ;=====================================================================
+  282                         MainLoop:
+  283 0133 cd4801             	call	WaitVBlank
+  284 0136 cd5501             	call	ReadPad
+  285 0139 cd8b01             	call	PlayerPhysics
+  286 013c cd4a07             	call	CameraUpdate
+  287 013f cd9507             	call	DrawMario
+  288 0142 cd7f08             	call	SoundUpdate
+  289 0145 c33301             	jp	MainLoop
+  290
+  291                         ;=====================================================================
+  292                         WaitVBlank:
+  293                         waitvb:
+  294 0148 dbbf               	in	a, (VDP_CTRL)
+  295 014a 87                 	add	a, a
+  296 014b 30fb               	jr	nc, waitvb
+  297 014d 2a2fc0             	ld	hl, (frameCnt)
+  298 0150 23                 	inc	hl
+  299 0151 222fc0             	ld	(frameCnt), hl
+  300 0154 c9                 	ret
+  301
+  302                         ;=====================================================================
+  303                         ReadPad:
+  304 0155 dbc0               	in	a, (PAD_PORT)
+  305 0157 2f                 	cpl
+  306 0158 47                 	ld	b, a
+  307 0159 af                 	xor	a
+  308 015a cb58               	bit	3, b
+  309 015c 2802               	jr	z, rp1
+  310 015e f601               	or	PAD_RIGHT
+  311                         rp1:
+  312 0160 cb50               	bit	2, b
+  313 0162 2802               	jr	z, rp2
+  314 0164 f602               	or	PAD_LEFT
+  315                         rp2:
+  316 0166 cb60               	bit	4, b
+  317 0168 2802               	jr	z, rp3
+  318 016a f604               	or	PAD_A
+  319                         rp3:
+  320 016c cb68               	bit	5, b
+  321 016e 2802               	jr	z, rp4
+  322 0170 f608               	or	PAD_B
+  323                         rp4:
+  324 0172 3211c0             	ld	(pad), a
+  325 0175 2112c0             	ld	hl, padPrev
+  326 0178 4e                 	ld	c, (hl)
+  327 0179 77                 	ld	(hl), a
+  328 017a 47                 	ld	b, a
+  329 017b 79                 	ld	a, c
+  330 017c 2f                 	cpl
+  331 017d a0                 	and	b
+  332 017e 3213c0             	ld	(padEdge), a
+  333 0181 c9                 	ret
+  334
+  335                         ;=====================================================================
+  336                         ; |xvel| in a (Z set when zero)
+  337                         AbsXVel:
+  338 0182 3a04c0             	ld	a, (xvel)
+  339 0185 cb7f               	bit	7, a
+  340 0187 c8                 	ret	z
+  341 0188 ed44               	neg
+  342 018a c9                 	ret
+  343
+  344                         ;=====================================================================
+  345                         .include "physics.z80"
     1                         ;=====================================================================
     2                         ; physics.z80 - port of PRG008 player physics (small Mario, overworld)
     3                         ;
@@ -523,7 +525,7 @@
   180 02a9 af                 	xor	a
   181 02aa 3209c0             	ld	(onGround), a
   182 02ad 3207c0             	ld	(yfrac), a
-  183 02b0 cd1b08             	call	SndPlayJump
+  183 02b0 cd6308             	call	SndPlayJump
   184                         ph_nojump:
   185
   186                         	; ---------------- gravity ----------------
@@ -590,7 +592,7 @@
   247 0323 79                 	ld	a, c
   248 0324 b7                 	or	a
   249 0325 2803               	jr	z, ph_sk1
-  250 0327 cd3008             	call	SndPlaySkid
+  250 0327 cd7808             	call	SndPlaySkid
   251                         ph_sk1:
   252 032a 79                 	ld	a, c
   253 032b 3215c0             	ld	(skidOld), a
@@ -868,11 +870,11 @@
   525 0527 3a20c0             	ld	a, (tmp2)
   526 052a 5f                 	ld	e, a
   527 052b 0e05               	ld	c, T_USED
-  528 052d cd4e06             	call	OvlSet
-  529 0530 cd2208             	call	SndPlayCoin
+  528 052d cd0f07             	call	OvlSetPoke
+  529 0530 cd6a08             	call	SndPlayCoin
   530 0533 c9                 	ret
   531                         cy_bs:
-  532 0534 cd2908             	call	SndPlayBump
+  532 0534 cd7108             	call	SndPlayBump
   533 0537 c9                 	ret
   534
   535                         ;=====================================================================
@@ -931,8 +933,8 @@
   588 05a7 fe0b               	cp	T_COIN
   589 05a9 c0                 	ret	nz
   590 05aa 0e00               	ld	c, T_BLANK
-  591 05ac cd4e06             	call	OvlSet
-  592 05af cd2208             	call	SndPlayCoin
+  591 05ac cd0f07             	call	OvlSetPoke
+  592 05af cd6a08             	call	SndPlayCoin
   593 05b2 2116c0             	ld	hl, coinCount
   594 05b5 34                 	inc	(hl)
   595 05b6 c9                 	ret
@@ -975,233 +977,286 @@
   630 0619 04050405           RunCycle:	.db F_RUN0, F_RUN1, F_RUN0, F_RUN1
   631
   632                        *END INCLUDE src/physics.z80
-  344                         .include "camera.z80"
+  346                         .include "camera.z80"
     1                         ;=====================================================================
     2                         ; camera.z80 - level tile access, overlay and the scrolling camera
     3                         ;
-    4                         ; The TMS9918A has no scroll registers, so the camera streams whole
-    5                         ; name-table columns (24 bytes each) as it crosses tile boundaries,
-    6                         ; exactly like SG-1000 games of the era did.
-    7                         ;=====================================================================
-    8
-    9                         ; d = column, e = row -> a = tile (overlay first, then ROM)
-   10                         TileAt:
-   11 061d 2140c0             	ld	hl, OVL_BASE
-   12                         ta_l:
-   13 0620 7e                 	ld	a, (hl)
-   14 0621 feff               	cp	$FF
-   15 0623 2814               	jr	z, ta_rom
-   16 0625 ba                 	cp	d
-   17 0626 200c               	jr	nz, ta_n
-   18 0628 23                 	inc	hl
-   19 0629 7e                 	ld	a, (hl)
-   20 062a 2b                 	dec	hl
-   21 062b bb                 	cp	e
-   22 062c 2006               	jr	nz, ta_n
-   23 062e 23                 	inc	hl
-   24 062f 23                 	inc	hl
-   25 0630 7e                 	ld	a, (hl)
-   26 0631 2b                 	dec	hl
-   27 0632 2b                 	dec	hl
-   28 0633 c9                 	ret
-   29                         ta_n:
-   30 0634 23                 	inc	hl
-   31 0635 23                 	inc	hl
-   32 0636 23                 	inc	hl
-   33 0637 18e7               	jr	ta_l
-   34                         ta_rom:
-   35 0639 d5                 	push	de
-   36 063a 2600               	ld	h, 0
-   37 063c 6a                 	ld	l, d
-   38 063d 29                 	add	hl, hl		; x2
-   39 063e 29                 	add	hl, hl		; x4
-   40 063f 29                 	add	hl, hl		; x8
-   41 0640 54                 	ld	d, h
-   42 0641 5d                 	ld	e, l
-   43 0642 29                 	add	hl, hl		; x16
-   44 0643 19                 	add	hl, de		; x24
-   45 0644 d1                 	pop	de
-   46 0645 1600               	ld	d, 0
-   47 0647 19                 	add	hl, de
-   48 0648 118055             	ld	de, LevelData
-   49 064b 19                 	add	hl, de
-   50 064c 7e                 	ld	a, (hl)
-   51 064d c9                 	ret
-   52
-   53                         ; d = column, e = row, c = new tile
-   54                         OvlSet:
-   55 064e 2140c0             	ld	hl, OVL_BASE
-   56                         os_l:
-   57 0651 7e                 	ld	a, (hl)
-   58 0652 feff               	cp	$FF
-   59 0654 2812               	jr	z, os_add
-   60 0656 ba                 	cp	d
-   61 0657 200a               	jr	nz, os_n
-   62 0659 23                 	inc	hl
-   63 065a 7e                 	ld	a, (hl)
-   64 065b 2b                 	dec	hl
-   65 065c bb                 	cp	e
-   66 065d 2004               	jr	nz, os_n
-   67 065f 23                 	inc	hl
-   68 0660 23                 	inc	hl
-   69 0661 71                 	ld	(hl), c
-   70 0662 c9                 	ret
-   71                         os_n:
-   72 0663 23                 	inc	hl
-   73 0664 23                 	inc	hl
-   74 0665 23                 	inc	hl
-   75 0666 18e9               	jr	os_l
-   76                         os_add:
-   77 0668 72                 	ld	(hl), d
-   78 0669 23                 	inc	hl
-   79 066a 73                 	ld	(hl), e
-   80 066b 23                 	inc	hl
-   81 066c 71                 	ld	(hl), c
-   82 066d 23                 	inc	hl
-   83 066e 36ff               	ld	(hl), $FF
-   84 0670 2223c0             	ld	(ovlEnd), hl
-   85 0673 c9                 	ret
-   86
-   87                         ; draw one screen column; level column in (tmp1), screen x in (tmp3)
-   88                         DrawColumn:
-   89 0674 0e00               	ld	c, 0			; row
-   90                         dc_l:
-   91 0676 3a1fc0             	ld	a, (tmp1)
-   92 0679 57                 	ld	d, a
-   93 067a 79                 	ld	a, c
-   94 067b 5f                 	ld	e, a
-   95 067c cd1d06             	call	TileAt
-   96 067f 3222c0             	ld	(tmp4), a
-   97 0682 2600               	ld	h, 0
-   98 0684 69                 	ld	l, c
-   99 0685 29                 	add	hl, hl
-  100 0686 29                 	add	hl, hl
-  101 0687 29                 	add	hl, hl
-  102 0688 29                 	add	hl, hl
-  103 0689 29                 	add	hl, hl		; row * 32
-  104 068a 3a21c0             	ld	a, (tmp3)
-  105 068d 5f                 	ld	e, a
-  106 068e 1600               	ld	d, 0
-  107 0690 19                 	add	hl, de
-  108 0691 110018             	ld	de, VRAM_PNT
-  109 0694 19                 	add	hl, de
-  110 0695 cd0700             	call	VdpSetAddrW
-  111 0698 3a22c0             	ld	a, (tmp4)
-  112 069b d3be               	out	(VDP_DATA), a
-  113 069d 0c                 	inc	c
-  114 069e 79                 	ld	a, c
-  115 069f fe18               	cp	24
-  116 06a1 20d3               	jr	nz, dc_l
-  117 06a3 c9                 	ret
-  118
-  119                         ;=====================================================================
-  120                         CameraUpdate:
-  121                         	; cam = clamp(px - 96, 0, LEVEL_MAXCAM)
-  122 06a4 2a00c0             	ld	hl, (px_lo)
-  123 06a7 116000             	ld	de, 96
-  124 06aa b7                 	or	a
-  125 06ab ed52               	sbc	hl, de
-  126 06ad cb7c               	bit	7, h
-  127 06af 2803               	jr	z, cu_pos
-  128 06b1 210000             	ld	hl, 0
-  129                         cu_pos:
-  130 06b4 118004             	ld	de, LEVEL_MAXCAM
-  131 06b7 b7                 	or	a
-  132 06b8 ed52               	sbc	hl, de
-  133 06ba 3003               	jr	nc, cu_max
-  134 06bc 19                 	add	hl, de		; below max: restore px-96
-  135 06bd 1803               	jr	cu_ok
-  136                         cu_max:
-  137 06bf 218004             	ld	hl, LEVEL_MAXCAM
-  138                         cu_ok:
-  139 06c2 220fc0             	ld	(cam_lo), hl
-  140 06c5 cb3c               	srl	h
-  141 06c7 cb1d               	rr	l
-  142 06c9 cb3c               	srl	h
-  143 06cb cb1d               	rr	l
-  144 06cd cb3c               	srl	h
-  145 06cf cb1d               	rr	l
-  146 06d1 7d                 	ld	a, l
-  147 06d2 3222c0             	ld	(tmp4), a		; new column
-  148 06d5 3a0ec0             	ld	a, (tileColCur)
-  149 06d8 feff               	cp	$FF
-  150 06da 2852               	jr	z, cu_full
-  151 06dc 47                 	ld	b, a
-  152 06dd 3a22c0             	ld	a, (tmp4)
-  153 06e0 90                 	sub	b
-  154 06e1 2869               	jr	z, cu_done
-  155 06e3 4f                 	ld	c, a			; signed delta
-  156 06e4 cb7f               	bit	7, a
-  157 06e6 2802               	jr	z, cu_abs
-  158 06e8 ed44               	neg
-  159                         cu_abs:
-  160 06ea fe20               	cp	32
-  161 06ec 3040               	jr	nc, cu_full
-  162 06ee 79                 	ld	a, c
-  163 06ef cb7f               	bit	7, a
-  164 06f1 201f               	jr	nz, cu_left
-  165                         	; moved right: new columns enter at the right edge
-  166 06f3 47                 	ld	b, a
-  167 06f4 3e20               	ld	a, 32
-  168 06f6 90                 	sub	b
-  169 06f7 57                 	ld	d, a			; first screen x to refresh
-  170                         cu_rl:
-  171 06f8 7a                 	ld	a, d
-  172 06f9 3221c0             	ld	(tmp3), a
-  173 06fc 3a22c0             	ld	a, (tmp4)
-  174 06ff 82                 	add	a, d
-  175 0700 321fc0             	ld	(tmp1), a
-  176 0703 d5                 	push	de
-  177 0704 c5                 	push	bc
-  178 0705 cd7406             	call	DrawColumn
-  179 0708 c1                 	pop	bc
-  180 0709 d1                 	pop	de
-  181 070a 14                 	inc	d
-  182 070b 7a                 	ld	a, d
-  183 070c fe20               	cp	32
-  184 070e 20e8               	jr	nz, cu_rl
-  185 0710 1834               	jr	cu_set
-  186                         cu_left:
-  187                         	; moved left: new columns enter at the left edge
-  188 0712 ed44               	neg
-  189 0714 47                 	ld	b, a
-  190 0715 1600               	ld	d, 0
-  191                         cu_ll:
-  192 0717 7a                 	ld	a, d
-  193 0718 3221c0             	ld	(tmp3), a
-  194 071b 3a22c0             	ld	a, (tmp4)
-  195 071e 82                 	add	a, d
-  196 071f 321fc0             	ld	(tmp1), a
-  197 0722 d5                 	push	de
-  198 0723 c5                 	push	bc
-  199 0724 cd7406             	call	DrawColumn
-  200 0727 c1                 	pop	bc
-  201 0728 d1                 	pop	de
-  202 0729 14                 	inc	d
-  203 072a 10eb               	djnz	cu_ll
-  204 072c 1818               	jr	cu_set
-  205                         cu_full:
-  206 072e 0600               	ld	b, 0
-  207                         cf_l:
-  208 0730 78                 	ld	a, b
-  209 0731 3221c0             	ld	(tmp3), a
-  210 0734 3a22c0             	ld	a, (tmp4)
-  211 0737 80                 	add	a, b
-  212 0738 321fc0             	ld	(tmp1), a
-  213 073b c5                 	push	bc
-  214 073c cd7406             	call	DrawColumn
-  215 073f c1                 	pop	bc
-  216 0740 04                 	inc	b
-  217 0741 78                 	ld	a, b
-  218 0742 fe20               	cp	32
-  219 0744 20ea               	jr	nz, cf_l
-  220                         cu_set:
-  221 0746 3a22c0             	ld	a, (tmp4)
-  222 0749 320ec0             	ld	(tileColCur), a
-  223                         cu_done:
-  224 074c c9                 	ret
-  225                        *END INCLUDE src/camera.z80
-  345                         .include "mario_draw.z80"
+    4                         ; The TMS9918A has no scroll registers: PNT column x always shows
+    5                         ; level column cam+x, so every camera-column change repaints the
+    6                         ; whole 32-column window. The row-major sweep in RedrawWindow costs
+    7                         ; ~30k T-states (half a frame), so the full redraw fits in one
+    8                         ; vblank period even at top run speed, where a camera column lasts
+    9                         ; two frames - the screen is never partially stale.
+   10                         ;=====================================================================
+   11
+   12                         ; d = column, e = row -> a = tile (overlay first, then ROM)
+   13                         TileAt:
+   14 061d 2140c0             	ld	hl, OVL_BASE
+   15                         ta_l:
+   16 0620 7e                 	ld	a, (hl)
+   17 0621 feff               	cp	$FF
+   18 0623 2814               	jr	z, ta_rom
+   19 0625 ba                 	cp	d
+   20 0626 200c               	jr	nz, ta_n
+   21 0628 23                 	inc	hl
+   22 0629 7e                 	ld	a, (hl)
+   23 062a 2b                 	dec	hl
+   24 062b bb                 	cp	e
+   25 062c 2006               	jr	nz, ta_n
+   26 062e 23                 	inc	hl
+   27 062f 23                 	inc	hl
+   28 0630 7e                 	ld	a, (hl)
+   29 0631 2b                 	dec	hl
+   30 0632 2b                 	dec	hl
+   31 0633 c9                 	ret
+   32                         ta_n:
+   33 0634 23                 	inc	hl
+   34 0635 23                 	inc	hl
+   35 0636 23                 	inc	hl
+   36 0637 18e7               	jr	ta_l
+   37                         ta_rom:
+   38 0639 d5                 	push	de
+   39 063a 2600               	ld	h, 0
+   40 063c 6a                 	ld	l, d
+   41 063d 29                 	add	hl, hl		; x2
+   42 063e 29                 	add	hl, hl		; x4
+   43 063f 29                 	add	hl, hl		; x8
+   44 0640 54                 	ld	d, h
+   45 0641 5d                 	ld	e, l
+   46 0642 29                 	add	hl, hl		; x16
+   47 0643 19                 	add	hl, de		; x24
+   48 0644 d1                 	pop	de
+   49 0645 1600               	ld	d, 0
+   50 0647 19                 	add	hl, de
+   51 0648 118055             	ld	de, LevelData
+   52 064b 19                 	add	hl, de
+   53 064c 7e                 	ld	a, (hl)
+   54 064d c9                 	ret
+   55
+   56                         ; d = column, e = row, c = new tile
+   57                         OvlSet:
+   58 064e 2140c0             	ld	hl, OVL_BASE
+   59                         os_l:
+   60 0651 7e                 	ld	a, (hl)
+   61 0652 feff               	cp	$FF
+   62 0654 2812               	jr	z, os_add
+   63 0656 ba                 	cp	d
+   64 0657 200a               	jr	nz, os_n
+   65 0659 23                 	inc	hl
+   66 065a 7e                 	ld	a, (hl)
+   67 065b 2b                 	dec	hl
+   68 065c bb                 	cp	e
+   69 065d 2004               	jr	nz, os_n
+   70 065f 23                 	inc	hl
+   71 0660 23                 	inc	hl
+   72 0661 71                 	ld	(hl), c
+   73 0662 c9                 	ret
+   74                         os_n:
+   75 0663 23                 	inc	hl
+   76 0664 23                 	inc	hl
+   77 0665 23                 	inc	hl
+   78 0666 18e9               	jr	os_l
+   79                         os_add:
+   80 0668 72                 	ld	(hl), d
+   81 0669 23                 	inc	hl
+   82 066a 73                 	ld	(hl), e
+   83 066b 23                 	inc	hl
+   84 066c 71                 	ld	(hl), c
+   85 066d 23                 	inc	hl
+   86 066e 36ff               	ld	(hl), $FF
+   87 0670 2223c0             	ld	(ovlEnd), hl
+   88 0673 c9                 	ret
+   89
+   90                         ; Full background redraw. The TMS9918A has no scroll registers: PNT
+   91                         ; column x always shows level column cam+x, so every camera-column
+   92                         ; change must repaint the whole 32-column window. The sweep is row
+   93                         ; major: one VDP address set per row, then 32 back-to-back data
+   94                         ; writes (the VDP auto-increments), source stride 24. Rows 0-3 are
+   95                         ; permanent sky (PNT cleared at boot, never redrawn).
+   96                         ; Cost: 640 tiles x ~42T + overhead ~ 30k T-states: one frame.
+   97                         ; tmp4 = camera column.
+   98                         RedrawWindow:
+   99 0674 3a22c0             	ld	a, (tmp4)
+  100 0677 6f                 	ld	l, a
+  101 0678 2600               	ld	h, 0
+  102 067a 29                 	add	hl, hl
+  103 067b 29                 	add	hl, hl
+  104 067c 29                 	add	hl, hl		; *8
+  105 067d 5d                 	ld	e, l
+  106 067e 54                 	ld	d, h
+  107 067f 29                 	add	hl, hl		; *16
+  108 0680 19                 	add	hl, de		; *24
+  109 0681 118055             	ld	de, LevelData
+  110 0684 19                 	add	hl, de
+  111 0685 2231c0             	ld	(rwBase), hl
+  112 0688 218018             	ld	hl, VRAM_PNT + 4 * 32
+  113 068b 222dc0             	ld	(paP), hl		; row address cursor
+  114 068e 0e04               	ld	c, 4			; row
+  115                         rw_row:
+  116 0690 2a31c0             	ld	hl, (rwBase)
+  117 0693 0600               	ld	b, 0
+  118 0695 09                 	add	hl, bc		; source = base + row
+  119 0696 3a2dc0             	ld	a, (paP)
+  120 0699 d3bf               	out	(VDP_CTRL), a
+  121 069b 3a2ec0             	ld	a, (paP + 1)
+  122 069e f640               	or	$40
+  123 06a0 d3bf               	out	(VDP_CTRL), a
+  124 06a2 111800             	ld	de, 24		; source stride
+  125 06a5 0620               	ld	b, 32
+  126                         rw_x:
+  127 06a7 7e                 	ld	a, (hl)
+  128 06a8 d3be               	out	(VDP_DATA), a
+  129 06aa 19                 	add	hl, de
+  130 06ab 10fa               	djnz	rw_x
+  131 06ad 3a2dc0             	ld	a, (paP)
+  132 06b0 c620               	add	a, 32
+  133 06b2 322dc0             	ld	(paP), a
+  134 06b5 3a2ec0             	ld	a, (paP + 1)
+  135 06b8 ce00               	adc	a, 0
+  136 06ba 322ec0             	ld	(paP + 1), a
+  137 06bd 0c                 	inc	c
+  138 06be 79                 	ld	a, c
+  139 06bf fe18               	cp	24
+  140 06c1 20cd               	jr	nz, rw_row
+  141 06c3 c9                 	ret
+  142
+  143                         ; repaint overlay entries (used blocks, collected coins) over the ROM
+  144                         ; sweep; slot = (col, row, tile), col $FF terminates
+  145                         RedrawOvl:
+  146 06c4 2140c0             	ld	hl, OVL_BASE
+  147                         ro_l:
+  148 06c7 7e                 	ld	a, (hl)
+  149 06c8 feff               	cp	$FF
+  150 06ca c8                 	ret	z
+  151 06cb 321fc0             	ld	(tmp1), a		; col
+  152 06ce 23                 	inc	hl
+  153 06cf 7e                 	ld	a, (hl)
+  154 06d0 3220c0             	ld	(tmp2), a		; row
+  155 06d3 23                 	inc	hl
+  156 06d4 7e                 	ld	a, (hl)
+  157 06d5 3221c0             	ld	(tmp3), a		; tile
+  158 06d8 23                 	inc	hl
+  159 06d9 e5                 	push	hl
+  160 06da 3a22c0             	ld	a, (tmp4)
+  161 06dd 5f                 	ld	e, a
+  162 06de 3a1fc0             	ld	a, (tmp1)
+  163 06e1 93                 	sub	e
+  164 06e2 3828               	jr	c, ro_next		; left of window
+  165 06e4 fe20               	cp	32
+  166 06e6 3024               	jr	nc, ro_next		; right of window
+  167 06e8 5f                 	ld	e, a			; screen x
+  168 06e9 3a20c0             	ld	a, (tmp2)
+  169 06ec fe04               	cp	4
+  170 06ee 381c               	jr	c, ro_next
+  171 06f0 fe18               	cp	24
+  172 06f2 3018               	jr	nc, ro_next
+  173 06f4 57                 	ld	d, a			; row
+  174 06f5 2600               	ld	h, 0
+  175 06f7 6a                 	ld	l, d
+  176 06f8 29                 	add	hl, hl
+  177 06f9 29                 	add	hl, hl
+  178 06fa 29                 	add	hl, hl
+  179 06fb 29                 	add	hl, hl
+  180 06fc 29                 	add	hl, hl		; row*32
+  181 06fd 1600               	ld	d, 0
+  182 06ff 19                 	add	hl, de
+  183 0700 110018             	ld	de, VRAM_PNT
+  184 0703 19                 	add	hl, de
+  185 0704 cd0700             	call	VdpSetAddrW
+  186 0707 3a21c0             	ld	a, (tmp3)
+  187 070a d3be               	out	(VDP_DATA), a
+  188                         ro_next:
+  189 070c e1                 	pop	hl
+  190 070d 18b8               	jr	ro_l
+  191
+  192                         OvlSetPoke:
+  193 070f cd4e06             	call	OvlSet
+  194 0712 c5                 	push	bc
+  195 0713 d5                 	push	de
+  196 0714 2a0fc0             	ld	hl, (cam_lo)
+  197 0717 cb3c               	srl	h
+  198 0719 cb1d               	rr	l
+  199 071b cb3c               	srl	h
+  200 071d cb1d               	rr	l
+  201 071f cb3c               	srl	h
+  202 0721 cb1d               	rr	l			; hl = camera column
+  203 0723 7a                 	ld	a, d
+  204 0724 95                 	sub	l
+  205 0725 3820               	jr	c, osp_out		; left of the window
+  206 0727 fe20               	cp	32
+  207 0729 301c               	jr	nc, osp_out		; right of the window
+  208 072b 3221c0             	ld	(tmp3), a		; screen x
+  209 072e 2600               	ld	h, 0
+  210 0730 6b                 	ld	l, e			; row
+  211 0731 29                 	add	hl, hl
+  212 0732 29                 	add	hl, hl
+  213 0733 29                 	add	hl, hl
+  214 0734 29                 	add	hl, hl
+  215 0735 29                 	add	hl, hl		; row*32
+  216 0736 3a21c0             	ld	a, (tmp3)
+  217 0739 5f                 	ld	e, a
+  218 073a 1600               	ld	d, 0
+  219 073c 19                 	add	hl, de
+  220 073d 110018             	ld	de, VRAM_PNT
+  221 0740 19                 	add	hl, de
+  222 0741 cd0700             	call	VdpSetAddrW
+  223 0744 79                 	ld	a, c
+  224 0745 d3be               	out	(VDP_DATA), a
+  225                         osp_out:
+  226 0747 d1                 	pop	de
+  227 0748 c1                 	pop	bc
+  228 0749 c9                 	ret
+  229
+  230                         ;=====================================================================
+  231                         CameraUpdate:
+  232                         	; cam = clamp(px - 96, 0, LEVEL_MAXCAM)
+  233 074a 2a00c0             	ld	hl, (px_lo)
+  234 074d 116000             	ld	de, 96
+  235 0750 b7                 	or	a
+  236 0751 ed52               	sbc	hl, de
+  237 0753 cb7c               	bit	7, h
+  238 0755 2803               	jr	z, cu_pos
+  239 0757 210000             	ld	hl, 0
+  240                         cu_pos:
+  241 075a 118004             	ld	de, LEVEL_MAXCAM
+  242 075d b7                 	or	a
+  243 075e ed52               	sbc	hl, de
+  244 0760 3003               	jr	nc, cu_max
+  245 0762 19                 	add	hl, de		; below max: restore px-96
+  246 0763 1803               	jr	cu_ok
+  247                         cu_max:
+  248 0765 218004             	ld	hl, LEVEL_MAXCAM
+  249                         cu_ok:
+  250 0768 220fc0             	ld	(cam_lo), hl
+  251 076b cb3c               	srl	h
+  252 076d cb1d               	rr	l
+  253 076f cb3c               	srl	h
+  254 0771 cb1d               	rr	l
+  255 0773 cb3c               	srl	h
+  256 0775 cb1d               	rr	l
+  257 0777 7d                 	ld	a, l
+  258 0778 3222c0             	ld	(tmp4), a		; new column
+  259                         	; The TMS9918A has no scroll registers: PNT column x always shows
+  260                         	; level column cam+x, so ANY camera-column change must repaint the
+  261                         	; whole 32-column window. The row-major sweep (RedrawWindow) costs
+  262                         	; ~30k T-states, so the full redraw fits in ONE frame even at run
+  263                         	; speed (a camera column lasts >= 2 frames) - no conveyor, no
+  264                         	; partially-stale screen.
+  265 077b 3a0ec0             	ld	a, (tileColCur)
+  266 077e feff               	cp	$FF
+  267 0780 2806               	jr	z, cu_redraw
+  268 0782 47                 	ld	b, a
+  269 0783 3a22c0             	ld	a, (tmp4)
+  270 0786 90                 	sub	b
+  271 0787 c8                 	ret	z			; camera column unchanged
+  272                         cu_redraw:
+  273 0788 3a22c0             	ld	a, (tmp4)
+  274 078b 320ec0             	ld	(tileColCur), a
+  275 078e cd7406             	call	RedrawWindow
+  276 0791 cdc406             	call	RedrawOvl
+  277 0794 c9                 	ret
+  278                        *END INCLUDE src/camera.z80
+  347                         .include "mario_draw.z80"
     1                         ;=====================================================================
     2                         ; mario_draw.z80 - animation frame choice + 3-sprite, 3-colour draw
     3                         ;
@@ -1213,139 +1268,139 @@
     9
    10                         DrawMario:
    11                         	; ---- choose frame
-   12 074d 3a08c0             	ld	a, (inair)
-   13 0750 b7                 	or	a
-   14 0751 2024               	jr	nz, dm_fjump
-   15 0753 3a27c0             	ld	a, (skidNow)
-   16 0756 b7                 	or	a
-   17 0757 2022               	jr	nz, dm_fskid
-   18 0759 cd8201             	call	AbsXVel
-   19 075c b7                 	or	a
-   20 075d 2820               	jr	z, dm_fstand
-   21 075f fe19               	cp	P_TOPWALK + 1
-   22 0761 3005               	jr	nc, dm_run
-   23 0763 211506             	ld	hl, WalkCycle
-   24 0766 1803               	jr	dm_cyc
+   12 0795 3a08c0             	ld	a, (inair)
+   13 0798 b7                 	or	a
+   14 0799 2024               	jr	nz, dm_fjump
+   15 079b 3a27c0             	ld	a, (skidNow)
+   16 079e b7                 	or	a
+   17 079f 2022               	jr	nz, dm_fskid
+   18 07a1 cd8201             	call	AbsXVel
+   19 07a4 b7                 	or	a
+   20 07a5 2820               	jr	z, dm_fstand
+   21 07a7 fe19               	cp	P_TOPWALK + 1
+   22 07a9 3005               	jr	nc, dm_run
+   23 07ab 211506             	ld	hl, WalkCycle
+   24 07ae 1803               	jr	dm_cyc
    25                         dm_run:
-   26 0768 211906             	ld	hl, RunCycle
+   26 07b0 211906             	ld	hl, RunCycle
    27                         dm_cyc:
-   28 076b 3a0cc0             	ld	a, (animIdx)
-   29 076e e603               	and	3
-   30 0770 5f                 	ld	e, a
-   31 0771 1600               	ld	d, 0
-   32 0773 19                 	add	hl, de
-   33 0774 7e                 	ld	a, (hl)
-   34 0775 180a               	jr	dm_set
+   28 07b3 3a0cc0             	ld	a, (animIdx)
+   29 07b6 e603               	and	3
+   30 07b8 5f                 	ld	e, a
+   31 07b9 1600               	ld	d, 0
+   32 07bb 19                 	add	hl, de
+   33 07bc 7e                 	ld	a, (hl)
+   34 07bd 180a               	jr	dm_set
    35                         dm_fjump:
-   36 0777 3e02               	ld	a, F_JUMP
-   37 0779 1806               	jr	dm_set
+   36 07bf 3e02               	ld	a, F_JUMP
+   37 07c1 1806               	jr	dm_set
    38                         dm_fskid:
-   39 077b 3e03               	ld	a, F_SKID
-   40 077d 1802               	jr	dm_set
+   39 07c3 3e03               	ld	a, F_SKID
+   40 07c5 1802               	jr	dm_set
    41                         dm_fstand:
-   42 077f 3e00               	ld	a, F_STAND
+   42 07c7 3e00               	ld	a, F_STAND
    43                         dm_set:
-   44 0781 320dc0             	ld	(frameCur), a
+   44 07c9 320dc0             	ld	(frameCur), a
    45
    46                         	; ---- advance walk/run animation tick
-   47 0784 cd8201             	call	AbsXVel
-   48 0787 b7                 	or	a
-   49 0788 281f               	jr	z, dm_sat
-   50 078a 1f                 	rra
-   51 078b 1f                 	rra
-   52 078c 1f                 	rra			; |xvel| >> 3
-   53 078d fe09               	cp	9
-   54 078f 3802               	jr	c, dm_t1
-   55 0791 3e08               	ld	a, 8
+   47 07cc cd8201             	call	AbsXVel
+   48 07cf b7                 	or	a
+   49 07d0 281f               	jr	z, dm_sat
+   50 07d2 1f                 	rra
+   51 07d3 1f                 	rra
+   52 07d4 1f                 	rra			; |xvel| >> 3
+   53 07d5 fe09               	cp	9
+   54 07d7 3802               	jr	c, dm_t1
+   55 07d9 3e08               	ld	a, 8
    56                         dm_t1:
-   57 0793 5f                 	ld	e, a
-   58 0794 1600               	ld	d, 0
-   59 0796 21fc05             	ld	hl, WalkTickMax
-   60 0799 19                 	add	hl, de
-   61 079a 46                 	ld	b, (hl)
-   62 079b 210bc0             	ld	hl, animTick
-   63 079e 34                 	inc	(hl)
-   64 079f 7e                 	ld	a, (hl)
-   65 07a0 b8                 	cp	b
-   66 07a1 3806               	jr	c, dm_sat
-   67 07a3 3600               	ld	(hl), 0
-   68 07a5 210cc0             	ld	hl, animIdx
-   69 07a8 34                 	inc	(hl)
+   57 07db 5f                 	ld	e, a
+   58 07dc 1600               	ld	d, 0
+   59 07de 21fc05             	ld	hl, WalkTickMax
+   60 07e1 19                 	add	hl, de
+   61 07e2 46                 	ld	b, (hl)
+   62 07e3 210bc0             	ld	hl, animTick
+   63 07e6 34                 	inc	(hl)
+   64 07e7 7e                 	ld	a, (hl)
+   65 07e8 b8                 	cp	b
+   66 07e9 3806               	jr	c, dm_sat
+   67 07eb 3600               	ld	(hl), 0
+   68 07ed 210cc0             	ld	hl, animIdx
+   69 07f0 34                 	inc	(hl)
    70                         dm_sat:
    71                         	; ---- screen position
-   72 07a9 2a00c0             	ld	hl, (px_lo)
-   73 07ac ed5b0fc0           	ld	de, (cam_lo)
-   74 07b0 b7                 	or	a
-   75 07b1 ed52               	sbc	hl, de
-   76 07b3 7d                 	ld	a, l
-   77 07b4 3226c0             	ld	(scrX), a
+   72 07f1 2a00c0             	ld	hl, (px_lo)
+   73 07f4 ed5b0fc0           	ld	de, (cam_lo)
+   74 07f8 b7                 	or	a
+   75 07f9 ed52               	sbc	hl, de
+   76 07fb 7d                 	ld	a, l
+   77 07fc 3226c0             	ld	(scrX), a
    78
    79                         	; ---- facing
-   80 07b7 3a11c0             	ld	a, (pad)
-   81 07ba e603               	and	PAD_LEFT | PAD_RIGHT
-   82 07bc 280f               	jr	z, dm_out
-   83 07be e602               	and	PAD_LEFT
-   84 07c0 2807               	jr	z, dm_fr
-   85 07c2 3e01               	ld	a, 1
-   86 07c4 320ac0             	ld	(facing), a
-   87 07c7 1804               	jr	dm_out
+   80 07ff 3a11c0             	ld	a, (pad)
+   81 0802 e603               	and	PAD_LEFT | PAD_RIGHT
+   82 0804 280f               	jr	z, dm_out
+   83 0806 e602               	and	PAD_LEFT
+   84 0808 2807               	jr	z, dm_fr
+   85 080a 3e01               	ld	a, 1
+   86 080c 320ac0             	ld	(facing), a
+   87 080f 1804               	jr	dm_out
    88                         dm_fr:
-   89 07c9 af                 	xor	a
-   90 07ca 320ac0             	ld	(facing), a
+   89 0811 af                 	xor	a
+   90 0812 320ac0             	ld	(facing), a
    91                         dm_out:
    92                         	; ---- write the three sprite attributes
-   93 07cd 21003f             	ld	hl, VRAM_SAT
-   94 07d0 cd0700             	call	VdpSetAddrW
-   95 07d3 3a0dc0             	ld	a, (frameCur)
-   96 07d6 47                 	ld	b, a
-   97 07d7 87                 	add	a, a		; x2
-   98 07d8 87                 	add	a, a		; x4
-   99 07d9 4f                 	ld	c, a
-  100 07da 78                 	ld	a, b
-  101 07db 87                 	add	a, a		; x2
-  102 07dc 81                 	add	a, c		; x6
-  103 07dd 47                 	ld	b, a
-  104 07de 3a0ac0             	ld	a, (facing)
-  105 07e1 b7                 	or	a
-  106 07e2 2804               	jr	z, dm_g0
-  107 07e4 3e03               	ld	a, 3
-  108 07e6 80                 	add	a, b
-  109 07e7 47                 	ld	b, a		; group base = frame*6 + facing*3
+   93 0815 21003f             	ld	hl, VRAM_SAT
+   94 0818 cd0700             	call	VdpSetAddrW
+   95 081b 3a0dc0             	ld	a, (frameCur)
+   96 081e 47                 	ld	b, a
+   97 081f 87                 	add	a, a		; x2
+   98 0820 87                 	add	a, a		; x4
+   99 0821 4f                 	ld	c, a
+  100 0822 78                 	ld	a, b
+  101 0823 87                 	add	a, a		; x2
+  102 0824 81                 	add	a, c		; x6
+  103 0825 47                 	ld	b, a
+  104 0826 3a0ac0             	ld	a, (facing)
+  105 0829 b7                 	or	a
+  106 082a 2804               	jr	z, dm_g0
+  107 082c 3e03               	ld	a, 3
+  108 082e 80                 	add	a, b
+  109 082f 47                 	ld	b, a		; group base = frame*6 + facing*3
   110                         dm_g0:
-  111 07e8 3a02c0             	ld	a, (py_lo)
-  112 07eb 3d                 	dec	a
-  113 07ec 3222c0             	ld	(tmp4), a		; SAT Y (TMS: screen y = Y+1)
-  114 07ef 3a26c0             	ld	a, (scrX)
-  115 07f2 3221c0             	ld	(tmp3), a		; SAT X
-  116 07f5 0e00               	ld	c, 0		; layer
+  111 0830 3a02c0             	ld	a, (py_lo)
+  112 0833 3d                 	dec	a
+  113 0834 3222c0             	ld	(tmp4), a		; SAT Y (TMS: screen y = Y+1)
+  114 0837 3a26c0             	ld	a, (scrX)
+  115 083a 3221c0             	ld	(tmp3), a		; SAT X
+  116 083d 0e00               	ld	c, 0		; layer
   117                         dm_l:
-  118 07f7 3a22c0             	ld	a, (tmp4)
-  119 07fa d3be               	out	(VDP_DATA), a
-  120 07fc 3a21c0             	ld	a, (tmp3)
-  121 07ff d3be               	out	(VDP_DATA), a
-  122 0801 78                 	ld	a, b
-  123 0802 81                 	add	a, c		; group
-  124 0803 87                 	add	a, a
-  125 0804 87                 	add	a, a		; pattern byte = group * 4
-  126 0805 d3be               	out	(VDP_DATA), a
-  127 0807 59                 	ld	e, c
-  128 0808 1600               	ld	d, 0
-  129 080a 211808             	ld	hl, MarioCols
-  130 080d 19                 	add	hl, de
-  131 080e 7e                 	ld	a, (hl)
-  132 080f d3be               	out	(VDP_DATA), a
-  133 0811 0c                 	inc	c
-  134 0812 79                 	ld	a, c
-  135 0813 fe03               	cp	3
-  136 0815 20e0               	jr	nz, dm_l
+  118 083f 3a22c0             	ld	a, (tmp4)
+  119 0842 d3be               	out	(VDP_DATA), a
+  120 0844 3a21c0             	ld	a, (tmp3)
+  121 0847 d3be               	out	(VDP_DATA), a
+  122 0849 78                 	ld	a, b
+  123 084a 81                 	add	a, c		; group
+  124 084b 87                 	add	a, a
+  125 084c 87                 	add	a, a		; pattern byte = group * 4
+  126 084d d3be               	out	(VDP_DATA), a
+  127 084f 59                 	ld	e, c
+  128 0850 1600               	ld	d, 0
+  129 0852 216008             	ld	hl, MarioCols
+  130 0855 19                 	add	hl, de
+  131 0856 7e                 	ld	a, (hl)
+  132 0857 d3be               	out	(VDP_DATA), a
+  133 0859 0c                 	inc	c
+  134 085a 79                 	ld	a, c
+  135 085b fe03               	cp	3
+  136 085d 20e0               	jr	nz, dm_l
   137                         	; ---- keep the remaining sprites hidden (written once at boot,
   138                         	;      but re-assert in case anything ever touches them)
-  139 0817 c9                 	ret
+  139 085f c9                 	ret
   140
   141                         MarioCols:
-  142 0818 080b01             	.db MARIO_COL_RED, MARIO_COL_SKIN, MARIO_COL_DARK
+  142 0860 080b01             	.db MARIO_COL_RED, MARIO_COL_SKIN, MARIO_COL_DARK
   143                        *END INCLUDE src/mario_draw.z80
-  346                         .include "sound.z80"
+  348                         .include "sound.z80"
     1                         ;=====================================================================
     2                         ; sound.z80 - SN76489 PSG effects for the SG-1000 port
     3                         ;
@@ -1355,189 +1410,189 @@
     7                         ;=====================================================================
     8
     9                         SndPlayJump:
-   10 081b 21d208             	ld	hl, SndJump
-   11 081e 2217c0             	ld	(sndPtr0), hl
-   12 0821 c9                 	ret
+   10 0863 211a09             	ld	hl, SndJump
+   11 0866 2217c0             	ld	(sndPtr0), hl
+   12 0869 c9                 	ret
    13
    14                         SndPlayCoin:
-   15 0822 21eb08             	ld	hl, SndCoin
-   16 0825 2219c0             	ld	(sndPtr1), hl
-   17 0828 c9                 	ret
+   15 086a 213309             	ld	hl, SndCoin
+   16 086d 2219c0             	ld	(sndPtr1), hl
+   17 0870 c9                 	ret
    18
    19                         SndPlayBump:
-   20 0829 210409             	ld	hl, SndBump
-   21 082c 221bc0             	ld	(sndPtr2), hl
-   22 082f c9                 	ret
+   20 0871 214c09             	ld	hl, SndBump
+   21 0874 221bc0             	ld	(sndPtr2), hl
+   22 0877 c9                 	ret
    23
    24                         SndPlaySkid:
-   25 0830 211409             	ld	hl, SndSkid
-   26 0833 221dc0             	ld	(sndPtr3), hl
-   27 0836 c9                 	ret
+   25 0878 215c09             	ld	hl, SndSkid
+   26 087b 221dc0             	ld	(sndPtr3), hl
+   27 087e c9                 	ret
    28
    29                         ;=====================================================================
    30                         SoundUpdate:
    31                         	; ---- voice 0 (ch0 tone): jump
-   32 0837 2a17c0             	ld	hl, (sndPtr0)
-   33 083a 7c                 	ld	a, h
-   34 083b b5                 	or	l
-   35 083c 281f               	jr	z, su1
-   36 083e 7e                 	ld	a, (hl)
-   37 083f 23                 	inc	hl
-   38 0840 b7                 	or	a
-   39 0841 280f               	jr	z, su0_stop
-   40 0843 4f                 	ld	c, a
+   32 087f 2a17c0             	ld	hl, (sndPtr0)
+   33 0882 7c                 	ld	a, h
+   34 0883 b5                 	or	l
+   35 0884 281f               	jr	z, su1
+   36 0886 7e                 	ld	a, (hl)
+   37 0887 23                 	inc	hl
+   38 0888 b7                 	or	a
+   39 0889 280f               	jr	z, su0_stop
+   40 088b 4f                 	ld	c, a
    41                         su0_l:
-   42 0844 7e                 	ld	a, (hl)
-   43 0845 d37f               	out	(PSG_PORT), a
-   44 0847 23                 	inc	hl
-   45 0848 0d                 	dec	c
-   46 0849 20f9               	jr	nz, su0_l
-   47 084b eb                 	ex	de, hl
-   48 084c ed5317c0           	ld	(sndPtr0), de
-   49 0850 180b               	jr	su1
+   42 088c 7e                 	ld	a, (hl)
+   43 088d d37f               	out	(PSG_PORT), a
+   44 088f 23                 	inc	hl
+   45 0890 0d                 	dec	c
+   46 0891 20f9               	jr	nz, su0_l
+   47 0893 eb                 	ex	de, hl
+   48 0894 ed5317c0           	ld	(sndPtr0), de
+   49 0898 180b               	jr	su1
    50                         su0_stop:
-   51 0852 af                 	xor	a
-   52 0853 3217c0             	ld	(sndPtr0), a
-   53 0856 3218c0             	ld	(sndPtr0 + 1), a
-   54 0859 3e9f               	ld	a, $9F
-   55 085b d37f               	out	(PSG_PORT), a
+   51 089a af                 	xor	a
+   52 089b 3217c0             	ld	(sndPtr0), a
+   53 089e 3218c0             	ld	(sndPtr0 + 1), a
+   54 08a1 3e9f               	ld	a, $9F
+   55 08a3 d37f               	out	(PSG_PORT), a
    56
    57                         	; ---- voice 1 (ch1 tone): coin
    58                         su1:
-   59 085d 2a19c0             	ld	hl, (sndPtr1)
-   60 0860 7c                 	ld	a, h
-   61 0861 b5                 	or	l
-   62 0862 281f               	jr	z, su2
-   63 0864 7e                 	ld	a, (hl)
-   64 0865 23                 	inc	hl
-   65 0866 b7                 	or	a
-   66 0867 280f               	jr	z, su1_stop
-   67 0869 4f                 	ld	c, a
+   59 08a5 2a19c0             	ld	hl, (sndPtr1)
+   60 08a8 7c                 	ld	a, h
+   61 08a9 b5                 	or	l
+   62 08aa 281f               	jr	z, su2
+   63 08ac 7e                 	ld	a, (hl)
+   64 08ad 23                 	inc	hl
+   65 08ae b7                 	or	a
+   66 08af 280f               	jr	z, su1_stop
+   67 08b1 4f                 	ld	c, a
    68                         su1_l:
-   69 086a 7e                 	ld	a, (hl)
-   70 086b d37f               	out	(PSG_PORT), a
-   71 086d 23                 	inc	hl
-   72 086e 0d                 	dec	c
-   73 086f 20f9               	jr	nz, su1_l
-   74 0871 eb                 	ex	de, hl
-   75 0872 ed5319c0           	ld	(sndPtr1), de
-   76 0876 180b               	jr	su2
+   69 08b2 7e                 	ld	a, (hl)
+   70 08b3 d37f               	out	(PSG_PORT), a
+   71 08b5 23                 	inc	hl
+   72 08b6 0d                 	dec	c
+   73 08b7 20f9               	jr	nz, su1_l
+   74 08b9 eb                 	ex	de, hl
+   75 08ba ed5319c0           	ld	(sndPtr1), de
+   76 08be 180b               	jr	su2
    77                         su1_stop:
-   78 0878 af                 	xor	a
-   79 0879 3219c0             	ld	(sndPtr1), a
-   80 087c 321ac0             	ld	(sndPtr1 + 1), a
-   81 087f 3ebf               	ld	a, $BF
-   82 0881 d37f               	out	(PSG_PORT), a
+   78 08c0 af                 	xor	a
+   79 08c1 3219c0             	ld	(sndPtr1), a
+   80 08c4 321ac0             	ld	(sndPtr1 + 1), a
+   81 08c7 3ebf               	ld	a, $BF
+   82 08c9 d37f               	out	(PSG_PORT), a
    83
    84                         	; ---- voice 2 (ch2 tone): bump
    85                         su2:
-   86 0883 2a1bc0             	ld	hl, (sndPtr2)
-   87 0886 7c                 	ld	a, h
-   88 0887 b5                 	or	l
-   89 0888 281f               	jr	z, su3
-   90 088a 7e                 	ld	a, (hl)
-   91 088b 23                 	inc	hl
-   92 088c b7                 	or	a
-   93 088d 280f               	jr	z, su2_stop
-   94 088f 4f                 	ld	c, a
+   86 08cb 2a1bc0             	ld	hl, (sndPtr2)
+   87 08ce 7c                 	ld	a, h
+   88 08cf b5                 	or	l
+   89 08d0 281f               	jr	z, su3
+   90 08d2 7e                 	ld	a, (hl)
+   91 08d3 23                 	inc	hl
+   92 08d4 b7                 	or	a
+   93 08d5 280f               	jr	z, su2_stop
+   94 08d7 4f                 	ld	c, a
    95                         su2_l:
-   96 0890 7e                 	ld	a, (hl)
-   97 0891 d37f               	out	(PSG_PORT), a
-   98 0893 23                 	inc	hl
-   99 0894 0d                 	dec	c
-  100 0895 20f9               	jr	nz, su2_l
-  101 0897 eb                 	ex	de, hl
-  102 0898 ed531bc0           	ld	(sndPtr2), de
-  103 089c 180b               	jr	su3
+   96 08d8 7e                 	ld	a, (hl)
+   97 08d9 d37f               	out	(PSG_PORT), a
+   98 08db 23                 	inc	hl
+   99 08dc 0d                 	dec	c
+  100 08dd 20f9               	jr	nz, su2_l
+  101 08df eb                 	ex	de, hl
+  102 08e0 ed531bc0           	ld	(sndPtr2), de
+  103 08e4 180b               	jr	su3
   104                         su2_stop:
-  105 089e af                 	xor	a
-  106 089f 321bc0             	ld	(sndPtr2), a
-  107 08a2 321cc0             	ld	(sndPtr2 + 1), a
-  108 08a5 3edf               	ld	a, $DF
-  109 08a7 d37f               	out	(PSG_PORT), a
+  105 08e6 af                 	xor	a
+  106 08e7 321bc0             	ld	(sndPtr2), a
+  107 08ea 321cc0             	ld	(sndPtr2 + 1), a
+  108 08ed 3edf               	ld	a, $DF
+  109 08ef d37f               	out	(PSG_PORT), a
   110
   111                         	; ---- voice 3 (ch3 noise): skid
   112                         su3:
-  113 08a9 2a1dc0             	ld	hl, (sndPtr3)
-  114 08ac 7c                 	ld	a, h
-  115 08ad b5                 	or	l
-  116 08ae c8                 	ret	z
-  117 08af 7e                 	ld	a, (hl)
-  118 08b0 23                 	inc	hl
-  119 08b1 b7                 	or	a
-  120 08b2 280e               	jr	z, su3_stop
-  121 08b4 4f                 	ld	c, a
+  113 08f1 2a1dc0             	ld	hl, (sndPtr3)
+  114 08f4 7c                 	ld	a, h
+  115 08f5 b5                 	or	l
+  116 08f6 c8                 	ret	z
+  117 08f7 7e                 	ld	a, (hl)
+  118 08f8 23                 	inc	hl
+  119 08f9 b7                 	or	a
+  120 08fa 280e               	jr	z, su3_stop
+  121 08fc 4f                 	ld	c, a
   122                         su3_l:
-  123 08b5 7e                 	ld	a, (hl)
-  124 08b6 d37f               	out	(PSG_PORT), a
-  125 08b8 23                 	inc	hl
-  126 08b9 0d                 	dec	c
-  127 08ba 20f9               	jr	nz, su3_l
-  128 08bc eb                 	ex	de, hl
-  129 08bd ed531dc0           	ld	(sndPtr3), de
-  130 08c1 c9                 	ret
+  123 08fd 7e                 	ld	a, (hl)
+  124 08fe d37f               	out	(PSG_PORT), a
+  125 0900 23                 	inc	hl
+  126 0901 0d                 	dec	c
+  127 0902 20f9               	jr	nz, su3_l
+  128 0904 eb                 	ex	de, hl
+  129 0905 ed531dc0           	ld	(sndPtr3), de
+  130 0909 c9                 	ret
   131                         su3_stop:
-  132 08c2 af                 	xor	a
-  133 08c3 321dc0             	ld	(sndPtr3), a
-  134 08c6 321ec0             	ld	(sndPtr3 + 1), a
-  135 08c9 3eff               	ld	a, $FF
-  136 08cb d37f               	out	(PSG_PORT), a
-  137 08cd c9                 	ret
+  132 090a af                 	xor	a
+  133 090b 321dc0             	ld	(sndPtr3), a
+  134 090e 321ec0             	ld	(sndPtr3 + 1), a
+  135 0911 3eff               	ld	a, $FF
+  136 0913 d37f               	out	(PSG_PORT), a
+  137 0915 c9                 	ret
   138
   139                         ;=====================================================================
   140                         ; effect streams (original envelope designs)
   141                         ;=====================================================================
   142                         PsgMute:
-  143 08ce 9fbfdfff           	.db $9F, $BF, $DF, $FF
+  143 0916 9fbfdfff           	.db $9F, $BF, $DF, $FF
   144
   145                         ; jump: quick rising chirp on channel 0
   146                         SndJump:
-  147 08d2 03908030           	.db 3, $90, $80, $30
-  148 08d6 028028             	.db 2, $80, $28
-  149 08d9 028020             	.db 2, $80, $20
-  150 08dc 028018             	.db 2, $80, $18
-  151 08df 028010             	.db 2, $80, $10
-  152 08e2 02800c             	.db 2, $80, $0C
-  153 08e5 028008             	.db 2, $80, $08
-  154 08e8 019f               	.db 1, $9F
-  155 08ea 00                 	.db 0
+  147 091a 03908030           	.db 3, $90, $80, $30
+  148 091e 028028             	.db 2, $80, $28
+  149 0921 028020             	.db 2, $80, $20
+  150 0924 028018             	.db 2, $80, $18
+  151 0927 028010             	.db 2, $80, $10
+  152 092a 02800c             	.db 2, $80, $0C
+  153 092d 028008             	.db 2, $80, $08
+  154 0930 019f               	.db 1, $9F
+  155 0932 00                 	.db 0
   156
   157                         ; coin: two-note blip on channel 1
   158                         SndCoin:
-  159 08eb 03b0a00a           	.db 3, $B0, $A0, $0A
-  160 08ef 02a00a             	.db 2, $A0, $0A
-  161 08f2 02a00a             	.db 2, $A0, $0A
-  162 08f5 02a00a             	.db 2, $A0, $0A
-  163 08f8 02a006             	.db 2, $A0, $06
-  164 08fb 02a006             	.db 2, $A0, $06
-  165 08fe 02a006             	.db 2, $A0, $06
-  166 0901 01bf               	.db 1, $BF
-  167 0903 00                 	.db 0
+  159 0933 03b0a00a           	.db 3, $B0, $A0, $0A
+  160 0937 02a00a             	.db 2, $A0, $0A
+  161 093a 02a00a             	.db 2, $A0, $0A
+  162 093d 02a00a             	.db 2, $A0, $0A
+  163 0940 02a006             	.db 2, $A0, $06
+  164 0943 02a006             	.db 2, $A0, $06
+  165 0946 02a006             	.db 2, $A0, $06
+  166 0949 01bf               	.db 1, $BF
+  167 094b 00                 	.db 0
   168
   169                         ; bump: short low thud on channel 2
   170                         SndBump:
-  171 0904 03d0c03c           	.db 3, $D0, $C0, $3C
-  172 0908 02c03c             	.db 2, $C0, $3C
-  173 090b 02c03c             	.db 2, $C0, $3C
-  174 090e 02c03c             	.db 2, $C0, $3C
-  175 0911 01df               	.db 1, $DF
-  176 0913 00                 	.db 0
+  171 094c 03d0c03c           	.db 3, $D0, $C0, $3C
+  172 0950 02c03c             	.db 2, $C0, $3C
+  173 0953 02c03c             	.db 2, $C0, $3C
+  174 0956 02c03c             	.db 2, $C0, $3C
+  175 0959 01df               	.db 1, $DF
+  176 095b 00                 	.db 0
   177
   178                         ; skid: raspy noise burst on channel 3
   179                         SndSkid:
-  180 0914 02f004             	.db 2, $F0, $04
-  181 0917 01f0               	.db 1, $F0
-  182 0919 01f0               	.db 1, $F0
-  183 091b 01f0               	.db 1, $F0
-  184 091d 01ff               	.db 1, $FF
-  185 091f 00                 	.db 0
+  180 095c 02f004             	.db 2, $F0, $04
+  181 095f 01f0               	.db 1, $F0
+  182 0961 01f0               	.db 1, $F0
+  183 0963 01f0               	.db 1, $F0
+  184 0965 01ff               	.db 1, $FF
+  185 0967 00                 	.db 0
   186                        *END INCLUDE src/sound.z80
-  347
-  348                         ;=====================================================================
-  349                         ; data
+  349
   350                         ;=====================================================================
-  351                         	.org $5000
-  352                         .include "../gen/tiles.z80"
+  351                         ; data
+  352                         ;=====================================================================
+  353                         	.org $5000
+  354                         .include "../gen/tiles.z80"
     1                         ; --- generated by tools/make_tiles.py ---
     2                         ; 8x8 background tiles, TMS9918 Graphics II (pattern + per-row colour).
     3                         TILE_N:	.equ 16
@@ -1580,7 +1635,7 @@
    25 50f0 5555555555555555   	.db $55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55
            5555555555555555
    26                        *END INCLUDE gen/tiles.z80
-  353                         .include "../gen/mario_sprites.z80"
+  355                         .include "../gen/mario_sprites.z80"
     1                         ; --- generated by tools/extract_mario.py ---
     2                         ; SMB3 small Mario, 3 colour layers (red/skin/dark).
     3                         ; Groups ordered (frame, direction, layer); a group is a 16x16
@@ -1593,188 +1648,188 @@
    10
    11                         MarioPatterns:
    12                         	; stand_r_red
-   13 5100 0000071f00000000   	.db $00,$00,$07,$1F,$00,$00,$00,$00
-   14 5108 0003060000010300   	.db $00,$03,$06,$00,$00,$01,$03,$00
-   15 5110 0000e0f000000000   	.db $00,$00,$E0,$F0,$00,$00,$00,$00
-   16 5118 0030787800c0e000   	.db $00,$30,$78,$78,$00,$C0,$E0,$00
+   13 5100 0000070f00000000   	.db $00,$00,$07,$0F,$00,$00,$00,$00
+   14 5108 000c1e1e00030700   	.db $00,$0C,$1E,$1E,$00,$03,$07,$00
+   15 5110 0000e0f800000000   	.db $00,$00,$E0,$F8,$00,$00,$00,$00
+   16 5118 00c060000080c000   	.db $00,$C0,$60,$00,$00,$80,$C0,$00
    17                         	; stand_r_skin
-   18 5120 00000000021e1d00   	.db $00,$00,$00,$00,$02,$1E,$1D,$00
-   19 5128 0700000002000000   	.db $07,$00,$00,$00,$02,$00,$00,$00
-   20 5130 00000000c09898e0   	.db $00,$00,$00,$00,$C0,$98,$98,$E0
-   21 5138 c000000070300000   	.db $C0,$00,$00,$00,$70,$30,$00,$00
+   18 5120 0000000003191907   	.db $00,$00,$00,$00,$03,$19,$19,$07
+   19 5128 030000000e0c0000   	.db $03,$00,$00,$00,$0E,$0C,$00,$00
+   20 5130 000000004078b800   	.db $00,$00,$00,$00,$40,$78,$B8,$00
+   21 5138 e000000040000000   	.db $E0,$00,$00,$00,$40,$00,$00,$00
    22                         	; stand_r_dark
-   23 5140 000718201d21221f   	.db $00,$07,$18,$20,$1D,$21,$22,$1F
-   24 5148 0804090f0d0e0407   	.db $08,$04,$09,$0F,$0D,$0E,$04,$07
-   25 5150 00e0100838646418   	.db $00,$E0,$10,$08,$38,$64,$64,$18
-   26 5158 30c88484880810f0   	.db $30,$C8,$84,$84,$88,$08,$10,$F0
+   23 5140 000708101c262618   	.db $00,$07,$08,$10,$1C,$26,$26,$18
+   24 5148 0c1321211110080f   	.db $0C,$13,$21,$21,$11,$10,$08,$0F
+   25 5150 00e01804b88444f8   	.db $00,$E0,$18,$04,$B8,$84,$44,$F8
+   26 5158 102090f0b07020e0   	.db $10,$20,$90,$F0,$B0,$70,$20,$E0
    27                         	; stand_l_red
-   28 5160 0000070f00000000   	.db $00,$00,$07,$0F,$00,$00,$00,$00
-   29 5168 000c1e1e00030700   	.db $00,$0C,$1E,$1E,$00,$03,$07,$00
-   30 5170 0000e0f800000000   	.db $00,$00,$E0,$F8,$00,$00,$00,$00
-   31 5178 00c060000080c000   	.db $00,$C0,$60,$00,$00,$80,$C0,$00
+   28 5160 0000071f00000000   	.db $00,$00,$07,$1F,$00,$00,$00,$00
+   29 5168 0003060000010300   	.db $00,$03,$06,$00,$00,$01,$03,$00
+   30 5170 0000e0f000000000   	.db $00,$00,$E0,$F0,$00,$00,$00,$00
+   31 5178 0030787800c0e000   	.db $00,$30,$78,$78,$00,$C0,$E0,$00
    32                         	; stand_l_skin
-   33 5180 0000000003191907   	.db $00,$00,$00,$00,$03,$19,$19,$07
-   34 5188 030000000e0c0000   	.db $03,$00,$00,$00,$0E,$0C,$00,$00
-   35 5190 000000004078b800   	.db $00,$00,$00,$00,$40,$78,$B8,$00
-   36 5198 e000000040000000   	.db $E0,$00,$00,$00,$40,$00,$00,$00
+   33 5180 00000000021e1d00   	.db $00,$00,$00,$00,$02,$1E,$1D,$00
+   34 5188 0700000002000000   	.db $07,$00,$00,$00,$02,$00,$00,$00
+   35 5190 00000000c09898e0   	.db $00,$00,$00,$00,$C0,$98,$98,$E0
+   36 5198 c000000070300000   	.db $C0,$00,$00,$00,$70,$30,$00,$00
    37                         	; stand_l_dark
-   38 51a0 000708101c262618   	.db $00,$07,$08,$10,$1C,$26,$26,$18
-   39 51a8 0c1321211110080f   	.db $0C,$13,$21,$21,$11,$10,$08,$0F
-   40 51b0 00e01804b88444f8   	.db $00,$E0,$18,$04,$B8,$84,$44,$F8
-   41 51b8 102090f0b07020e0   	.db $10,$20,$90,$F0,$B0,$70,$20,$E0
+   38 51a0 000718201d21221f   	.db $00,$07,$18,$20,$1D,$21,$22,$1F
+   39 51a8 0804090f0d0e0407   	.db $08,$04,$09,$0F,$0D,$0E,$04,$07
+   40 51b0 00e0100838646418   	.db $00,$E0,$10,$08,$38,$64,$64,$18
+   41 51b8 30c88484880810f0   	.db $30,$C8,$84,$84,$88,$08,$10,$F0
    42                         	; walk1_r_red
-   43 51c0 00031f0000000000   	.db $00,$03,$1F,$00,$00,$00,$00,$00
-   44 51c8 03161000181c0e00   	.db $03,$16,$10,$00,$18,$1C,$0E,$00
-   45 51d0 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
-   46 51d8 38783000000c1c00   	.db $38,$78,$30,$00,$00,$0C,$1C,$00
+   43 51c0 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
+   44 51c8 1c1e0c0000303800   	.db $1C,$1E,$0C,$00,$00,$30,$38,$00
+   45 51d0 00c0f80000000000   	.db $00,$C0,$F8,$00,$00,$00,$00,$00
+   46 51d8 c068080018387000   	.db $C0,$68,$08,$00,$18,$38,$70,$00
    47                         	; walk1_r_skin
-   48 51e0 000000021e1d0007   	.db $00,$00,$00,$02,$1E,$1D,$00,$07
-   49 51e8 0000202900000000   	.db $00,$00,$20,$29,$00,$00,$00,$00
-   50 51f0 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
-   51 51f8 00060e0c00000000   	.db $00,$06,$0E,$0C,$00,$00,$00,$00
+   48 51e0 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
+   49 51e8 0060703000000000   	.db $00,$60,$70,$30,$00,$00,$00,$00
+   50 51f0 0000004078b800e0   	.db $00,$00,$00,$40,$78,$B8,$00,$E0
+   51 51f8 0000049400000000   	.db $00,$00,$04,$94,$00,$00,$00,$00
    52                         	; walk1_r_dark
-   53 5200 031c201d21221f08   	.db $03,$1C,$20,$1D,$21,$22,$1F,$08
-   54 5208 1c294f562723110e   	.db $1C,$29,$4F,$56,$27,$23,$11,$0E
-   55 5210 e010083864641838   	.db $E0,$10,$08,$38,$64,$64,$18,$38
-   56 5218 c681c1f2fcf2221c   	.db $C6,$81,$C1,$F2,$FC,$F2,$22,$1C
+   53 5200 0708101c2626181c   	.db $07,$08,$10,$1C,$26,$26,$18,$1C
+   54 5208 6381834f3f4f4438   	.db $63,$81,$83,$4F,$3F,$4F,$44,$38
+   55 5210 c03804b88444f810   	.db $C0,$38,$04,$B8,$84,$44,$F8,$10
+   56 5218 3894f26ae4c48870   	.db $38,$94,$F2,$6A,$E4,$C4,$88,$70
    57                         	; walk1_l_red
-   58 5220 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
-   59 5228 1c1e0c0000303800   	.db $1C,$1E,$0C,$00,$00,$30,$38,$00
-   60 5230 00c0f80000000000   	.db $00,$C0,$F8,$00,$00,$00,$00,$00
-   61 5238 c068080018387000   	.db $C0,$68,$08,$00,$18,$38,$70,$00
+   58 5220 00031f0000000000   	.db $00,$03,$1F,$00,$00,$00,$00,$00
+   59 5228 03161000181c0e00   	.db $03,$16,$10,$00,$18,$1C,$0E,$00
+   60 5230 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
+   61 5238 38783000000c1c00   	.db $38,$78,$30,$00,$00,$0C,$1C,$00
    62                         	; walk1_l_skin
-   63 5240 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
-   64 5248 0060703000000000   	.db $00,$60,$70,$30,$00,$00,$00,$00
-   65 5250 0000004078b800e0   	.db $00,$00,$00,$40,$78,$B8,$00,$E0
-   66 5258 0000049400000000   	.db $00,$00,$04,$94,$00,$00,$00,$00
+   63 5240 000000021e1d0007   	.db $00,$00,$00,$02,$1E,$1D,$00,$07
+   64 5248 0000202900000000   	.db $00,$00,$20,$29,$00,$00,$00,$00
+   65 5250 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
+   66 5258 00060e0c00000000   	.db $00,$06,$0E,$0C,$00,$00,$00,$00
    67                         	; walk1_l_dark
-   68 5260 0708101c2626181c   	.db $07,$08,$10,$1C,$26,$26,$18,$1C
-   69 5268 6381834f3f4f4438   	.db $63,$81,$83,$4F,$3F,$4F,$44,$38
-   70 5270 c03804b88444f810   	.db $C0,$38,$04,$B8,$84,$44,$F8,$10
-   71 5278 3894f26ae4c48870   	.db $38,$94,$F2,$6A,$E4,$C4,$88,$70
+   68 5260 031c201d21221f08   	.db $03,$1C,$20,$1D,$21,$22,$1F,$08
+   69 5268 1c294f562723110e   	.db $1C,$29,$4F,$56,$27,$23,$11,$0E
+   70 5270 e010083864641838   	.db $E0,$10,$08,$38,$64,$64,$18,$38
+   71 5278 c681c1f2fcf2221c   	.db $C6,$81,$C1,$F2,$FC,$F2,$22,$1C
    72                         	; jump_r_red
-   73 5280 00030f2020200010   	.db $00,$03,$0F,$20,$20,$20,$00,$10
-   74 5288 0b07607030300000   	.db $0B,$07,$60,$70,$30,$30,$00,$00
-   75 5290 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
-   76 5298 b8706020040e0600   	.db $B8,$70,$60,$20,$04,$0E,$06,$00
+   73 5280 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
+   74 5288 1d0e060420706000   	.db $1D,$0E,$06,$04,$20,$70,$60,$00
+   75 5290 00c0f00404040008   	.db $00,$C0,$F0,$04,$04,$04,$00,$08
+   76 5298 d0e0060e0c0c0000   	.db $D0,$E0,$06,$0E,$0C,$0C,$00,$00
    77                         	; jump_r_skin
-   78 52a0 007060021e1d000f   	.db $00,$70,$60,$02,$1E,$1D,$00,$0F
-   79 52a8 0000090000000000   	.db $00,$00,$09,$00,$00,$00,$00,$00
-   80 52b0 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
-   81 52b8 00000e0e00000000   	.db $00,$00,$0E,$0E,$00,$00,$00,$00
+   78 52a0 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
+   79 52a8 0000707000000000   	.db $00,$00,$70,$70,$00,$00,$00,$00
+   80 52b0 000e064078b800f0   	.db $00,$0E,$06,$40,$78,$B8,$00,$F0
+   81 52b8 0000900000000000   	.db $00,$00,$90,$00,$00,$00,$00,$00
    82                         	; jump_r_dark
-   83 52c0 738c905d41423f20   	.db $73,$8C,$90,$5D,$41,$42,$3F,$20
-   84 52c8 1478968f4f4f3100   	.db $14,$78,$96,$8F,$4F,$4F,$31,$00
-   85 52d0 e010083864641830   	.db $E0,$10,$08,$38,$64,$64,$18,$30
-   86 52d8 448e91d1faf1f976   	.db $44,$8E,$91,$D1,$FA,$F1,$F9,$76
+   83 52c0 0708101c2626180c   	.db $07,$08,$10,$1C,$26,$26,$18,$0C
+   84 52c8 2271898b5f8f9f6e   	.db $22,$71,$89,$8B,$5F,$8F,$9F,$6E
+   85 52d0 ce3109ba8242fc04   	.db $CE,$31,$09,$BA,$82,$42,$FC,$04
+   86 52d8 281e69f1f2f28c00   	.db $28,$1E,$69,$F1,$F2,$F2,$8C,$00
    87                         	; jump_l_red
-   88 52e0 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
-   89 52e8 1d0e060420706000   	.db $1D,$0E,$06,$04,$20,$70,$60,$00
-   90 52f0 00c0f00404040008   	.db $00,$C0,$F0,$04,$04,$04,$00,$08
-   91 52f8 d0e0060e0c0c0000   	.db $D0,$E0,$06,$0E,$0C,$0C,$00,$00
+   88 52e0 00030f2020200010   	.db $00,$03,$0F,$20,$20,$20,$00,$10
+   89 52e8 0b07607030300000   	.db $0B,$07,$60,$70,$30,$30,$00,$00
+   90 52f0 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
+   91 52f8 b8706020040e0600   	.db $B8,$70,$60,$20,$04,$0E,$06,$00
    92                         	; jump_l_skin
-   93 5300 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
-   94 5308 0000707000000000   	.db $00,$00,$70,$70,$00,$00,$00,$00
-   95 5310 000e064078b800f0   	.db $00,$0E,$06,$40,$78,$B8,$00,$F0
-   96 5318 0000900000000000   	.db $00,$00,$90,$00,$00,$00,$00,$00
+   93 5300 007060021e1d000f   	.db $00,$70,$60,$02,$1E,$1D,$00,$0F
+   94 5308 0000090000000000   	.db $00,$00,$09,$00,$00,$00,$00,$00
+   95 5310 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
+   96 5318 00000e0e00000000   	.db $00,$00,$0E,$0E,$00,$00,$00,$00
    97                         	; jump_l_dark
-   98 5320 0708101c2626180c   	.db $07,$08,$10,$1C,$26,$26,$18,$0C
-   99 5328 2271898b5f8f9f6e   	.db $22,$71,$89,$8B,$5F,$8F,$9F,$6E
-  100 5330 ce3109ba8242fc04   	.db $CE,$31,$09,$BA,$82,$42,$FC,$04
-  101 5338 281e69f1f2f28c00   	.db $28,$1E,$69,$F1,$F2,$F2,$8C,$00
+   98 5320 738c905d41423f20   	.db $73,$8C,$90,$5D,$41,$42,$3F,$20
+   99 5328 1478968f4f4f3100   	.db $14,$78,$96,$8F,$4F,$4F,$31,$00
+  100 5330 e010083864641830   	.db $E0,$10,$08,$38,$64,$64,$18,$30
+  101 5338 448e91d1faf1f976   	.db $44,$8E,$91,$D1,$FA,$F1,$F9,$76
   102                         	; skid_r_red
-  103 5340 00030f000000000f   	.db $00,$03,$0F,$00,$00,$00,$00,$0F
-  104 5348 0f07000000010000   	.db $0F,$07,$00,$00,$00,$01,$00,$00
-  105 5350 00e0f00004040000   	.db $00,$E0,$F0,$00,$04,$04,$00,$00
-  106 5358 000038786000e000   	.db $00,$00,$38,$78,$60,$00,$E0,$00
+  103 5340 00070f0020200000   	.db $00,$07,$0F,$00,$20,$20,$00,$00
+  104 5348 00001c1e06000700   	.db $00,$00,$1C,$1E,$06,$00,$07,$00
+  105 5350 00c0f000000000f0   	.db $00,$C0,$F0,$00,$00,$00,$00,$F0
+  106 5358 f0e0000000800000   	.db $F0,$E0,$00,$00,$00,$80,$00,$00
   107                         	; skid_r_skin
-  108 5360 00000005053f3000   	.db $00,$00,$00,$05,$05,$3F,$30,$00
-  109 5368 0000000000000000   	.db $00,$00,$00,$00,$00,$00,$00,$00
-  110 5370 000000803030ec00   	.db $00,$00,$00,$80,$30,$30,$EC,$00
-  111 5378 7060000000000000   	.db $70,$60,$00,$00,$00,$00,$00,$00
+  108 5360 000000010c0c3700   	.db $00,$00,$00,$01,$0C,$0C,$37,$00
+  109 5368 0e06000000000000   	.db $0E,$06,$00,$00,$00,$00,$00,$00
+  110 5370 000000a0a0fc0c00   	.db $00,$00,$00,$A0,$A0,$FC,$0C,$00
+  111 5378 0000000000000000   	.db $00,$00,$00,$00,$00,$00,$00,$00
   112                         	; skid_r_dark
-  113 5380 030c100a3a404f30   	.db $03,$0C,$10,$0A,$3A,$40,$4F,$30
-  114 5388 10180f0703020101   	.db $10,$18,$0F,$07,$03,$02,$01,$01
-  115 5390 e010087ccaca12fc   	.db $E0,$10,$08,$7C,$CA,$CA,$12,$FC
-  116 5398 8898c48498e010f0   	.db $88,$98,$C4,$84,$98,$E0,$10,$F0
+  113 5380 0708103e5353483f   	.db $07,$08,$10,$3E,$53,$53,$48,$3F
+  114 5388 111923211907080f   	.db $11,$19,$23,$21,$19,$07,$08,$0F
+  115 5390 c03008505c02f20c   	.db $C0,$30,$08,$50,$5C,$02,$F2,$0C
+  116 5398 0818f0e0c0408080   	.db $08,$18,$F0,$E0,$C0,$40,$80,$80
   117                         	; skid_l_red
-  118 53a0 00070f0020200000   	.db $00,$07,$0F,$00,$20,$20,$00,$00
-  119 53a8 00001c1e06000700   	.db $00,$00,$1C,$1E,$06,$00,$07,$00
-  120 53b0 00c0f000000000f0   	.db $00,$C0,$F0,$00,$00,$00,$00,$F0
-  121 53b8 f0e0000000800000   	.db $F0,$E0,$00,$00,$00,$80,$00,$00
+  118 53a0 00030f000000000f   	.db $00,$03,$0F,$00,$00,$00,$00,$0F
+  119 53a8 0f07000000010000   	.db $0F,$07,$00,$00,$00,$01,$00,$00
+  120 53b0 00e0f00004040000   	.db $00,$E0,$F0,$00,$04,$04,$00,$00
+  121 53b8 000038786000e000   	.db $00,$00,$38,$78,$60,$00,$E0,$00
   122                         	; skid_l_skin
-  123 53c0 000000010c0c3700   	.db $00,$00,$00,$01,$0C,$0C,$37,$00
-  124 53c8 0e06000000000000   	.db $0E,$06,$00,$00,$00,$00,$00,$00
-  125 53d0 000000a0a0fc0c00   	.db $00,$00,$00,$A0,$A0,$FC,$0C,$00
-  126 53d8 0000000000000000   	.db $00,$00,$00,$00,$00,$00,$00,$00
+  123 53c0 00000005053f3000   	.db $00,$00,$00,$05,$05,$3F,$30,$00
+  124 53c8 0000000000000000   	.db $00,$00,$00,$00,$00,$00,$00,$00
+  125 53d0 000000803030ec00   	.db $00,$00,$00,$80,$30,$30,$EC,$00
+  126 53d8 7060000000000000   	.db $70,$60,$00,$00,$00,$00,$00,$00
   127                         	; skid_l_dark
-  128 53e0 0708103e5353483f   	.db $07,$08,$10,$3E,$53,$53,$48,$3F
-  129 53e8 111923211907080f   	.db $11,$19,$23,$21,$19,$07,$08,$0F
-  130 53f0 c03008505c02f20c   	.db $C0,$30,$08,$50,$5C,$02,$F2,$0C
-  131 53f8 0818f0e0c0408080   	.db $08,$18,$F0,$E0,$C0,$40,$80,$80
+  128 53e0 030c100a3a404f30   	.db $03,$0C,$10,$0A,$3A,$40,$4F,$30
+  129 53e8 10180f0703020101   	.db $10,$18,$0F,$07,$03,$02,$01,$01
+  130 53f0 e010087ccaca12fc   	.db $E0,$10,$08,$7C,$CA,$CA,$12,$FC
+  131 53f8 8898c48498e010f0   	.db $88,$98,$C4,$84,$98,$E0,$10,$F0
   132                         	; run0_r_red
-  133 5400 00031f0000000000   	.db $00,$03,$1F,$00,$00,$00,$00,$00
-  134 5408 1b161000181c0e00   	.db $1B,$16,$10,$00,$18,$1C,$0E,$00
-  135 5410 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
-  136 5418 38783800000c1c00   	.db $38,$78,$38,$00,$00,$0C,$1C,$00
+  133 5400 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
+  134 5408 1c1e1c0000303800   	.db $1C,$1E,$1C,$00,$00,$30,$38,$00
+  135 5410 00c0f80000000000   	.db $00,$C0,$F8,$00,$00,$00,$00,$00
+  136 5418 d868080018387000   	.db $D8,$68,$08,$00,$18,$38,$70,$00
   137                         	; run0_r_skin
-  138 5420 000000021e1d0007   	.db $00,$00,$00,$02,$1E,$1D,$00,$07
-  139 5428 6060200900000000   	.db $60,$60,$20,$09,$00,$00,$00,$00
-  140 5430 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
-  141 5438 0606040000000000   	.db $06,$06,$04,$00,$00,$00,$00,$00
+  138 5420 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
+  139 5428 6060200000000000   	.db $60,$60,$20,$00,$00,$00,$00,$00
+  140 5430 0000004078b800e0   	.db $00,$00,$00,$40,$78,$B8,$00,$E0
+  141 5438 0606049000000000   	.db $06,$06,$04,$90,$00,$00,$00,$00
   142                         	; run0_r_dark
-  143 5440 031c201d21221ff8   	.db $03,$1C,$20,$1D,$21,$22,$1F,$F8
-  144 5448 84894f362723110e   	.db $84,$89,$4F,$36,$27,$23,$11,$0E
-  145 5450 e01008386464183e   	.db $E0,$10,$08,$38,$64,$64,$18,$3E
-  146 5458 c181c2fcfcf2221c   	.db $C1,$81,$C2,$FC,$FC,$F2,$22,$1C
+  143 5440 0708101c2626187c   	.db $07,$08,$10,$1C,$26,$26,$18,$7C
+  144 5448 8381433f3f4f4438   	.db $83,$81,$43,$3F,$3F,$4F,$44,$38
+  145 5450 c03804b88444f81f   	.db $C0,$38,$04,$B8,$84,$44,$F8,$1F
+  146 5458 2191f26ce4c48870   	.db $21,$91,$F2,$6C,$E4,$C4,$88,$70
   147                         	; run0_l_red
-  148 5460 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
-  149 5468 1c1e1c0000303800   	.db $1C,$1E,$1C,$00,$00,$30,$38,$00
-  150 5470 00c0f80000000000   	.db $00,$C0,$F8,$00,$00,$00,$00,$00
-  151 5478 d868080018387000   	.db $D8,$68,$08,$00,$18,$38,$70,$00
+  148 5460 00031f0000000000   	.db $00,$03,$1F,$00,$00,$00,$00,$00
+  149 5468 1b161000181c0e00   	.db $1B,$16,$10,$00,$18,$1C,$0E,$00
+  150 5470 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
+  151 5478 38783800000c1c00   	.db $38,$78,$38,$00,$00,$0C,$1C,$00
   152                         	; run0_l_skin
-  153 5480 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
-  154 5488 6060200000000000   	.db $60,$60,$20,$00,$00,$00,$00,$00
-  155 5490 0000004078b800e0   	.db $00,$00,$00,$40,$78,$B8,$00,$E0
-  156 5498 0606049000000000   	.db $06,$06,$04,$90,$00,$00,$00,$00
+  153 5480 000000021e1d0007   	.db $00,$00,$00,$02,$1E,$1D,$00,$07
+  154 5488 6060200900000000   	.db $60,$60,$20,$09,$00,$00,$00,$00
+  155 5490 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
+  156 5498 0606040000000000   	.db $06,$06,$04,$00,$00,$00,$00,$00
   157                         	; run0_l_dark
-  158 54a0 0708101c2626187c   	.db $07,$08,$10,$1C,$26,$26,$18,$7C
-  159 54a8 8381433f3f4f4438   	.db $83,$81,$43,$3F,$3F,$4F,$44,$38
-  160 54b0 c03804b88444f81f   	.db $C0,$38,$04,$B8,$84,$44,$F8,$1F
-  161 54b8 2191f26ce4c48870   	.db $21,$91,$F2,$6C,$E4,$C4,$88,$70
+  158 54a0 031c201d21221ff8   	.db $03,$1C,$20,$1D,$21,$22,$1F,$F8
+  159 54a8 84894f362723110e   	.db $84,$89,$4F,$36,$27,$23,$11,$0E
+  160 54b0 e01008386464183e   	.db $E0,$10,$08,$38,$64,$64,$18,$3E
+  161 54b8 c181c2fcfcf2221c   	.db $C1,$81,$C2,$FC,$FC,$F2,$22,$1C
   162                         	; run1_r_red
-  163 54c0 00031f0000000000   	.db $00,$03,$1F,$00,$00,$00,$00,$00
-  164 54c8 1b16100000010300   	.db $1B,$16,$10,$00,$00,$01,$03,$00
-  165 54d0 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
-  166 54d8 3878380000e0e000   	.db $38,$78,$38,$00,$00,$E0,$E0,$00
+  163 54c0 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
+  164 54c8 1c1e1c0000070700   	.db $1C,$1E,$1C,$00,$00,$07,$07,$00
+  165 54d0 00c0f80000000000   	.db $00,$C0,$F8,$00,$00,$00,$00,$00
+  166 54d8 d86808000080c000   	.db $D8,$68,$08,$00,$00,$80,$C0,$00
   167                         	; run1_r_skin
-  168 54e0 000000021e1d0007   	.db $00,$00,$00,$02,$1E,$1D,$00,$07
-  169 54e8 6060200900000000   	.db $60,$60,$20,$09,$00,$00,$00,$00
-  170 54f0 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
-  171 54f8 0606040000000000   	.db $06,$06,$04,$00,$00,$00,$00,$00
+  168 54e0 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
+  169 54e8 6060200000000000   	.db $60,$60,$20,$00,$00,$00,$00,$00
+  170 54f0 0000004078b800e0   	.db $00,$00,$00,$40,$78,$B8,$00,$E0
+  171 54f8 0606049000000000   	.db $06,$06,$04,$90,$00,$00,$00,$00
   172                         	; run1_r_dark
-  173 5500 031c201d21221ff8   	.db $03,$1C,$20,$1D,$21,$22,$1F,$F8
-  174 5508 84894f360f0e0407   	.db $84,$89,$4F,$36,$0F,$0E,$04,$07
-  175 5510 e01008386464183e   	.db $E0,$10,$08,$38,$64,$64,$18,$3E
-  176 5518 c181c2fcf81810f0   	.db $C1,$81,$C2,$FC,$F8,$18,$10,$F0
+  173 5500 0708101c2626187c   	.db $07,$08,$10,$1C,$26,$26,$18,$7C
+  174 5508 8381433f1f18080f   	.db $83,$81,$43,$3F,$1F,$18,$08,$0F
+  175 5510 c03804b88444f81f   	.db $C0,$38,$04,$B8,$84,$44,$F8,$1F
+  176 5518 2191f26cf07020e0   	.db $21,$91,$F2,$6C,$F0,$70,$20,$E0
   177                         	; run1_l_red
-  178 5520 00070f0000000000   	.db $00,$07,$0F,$00,$00,$00,$00,$00
-  179 5528 1c1e1c0000070700   	.db $1C,$1E,$1C,$00,$00,$07,$07,$00
-  180 5530 00c0f80000000000   	.db $00,$C0,$F8,$00,$00,$00,$00,$00
-  181 5538 d86808000080c000   	.db $D8,$68,$08,$00,$00,$80,$C0,$00
+  178 5520 00031f0000000000   	.db $00,$03,$1F,$00,$00,$00,$00,$00
+  179 5528 1b16100000010300   	.db $1B,$16,$10,$00,$00,$01,$03,$00
+  180 5530 00e0f00000000000   	.db $00,$E0,$F0,$00,$00,$00,$00,$00
+  181 5538 3878380000e0e000   	.db $38,$78,$38,$00,$00,$E0,$E0,$00
   182                         	; run1_l_skin
-  183 5540 0000000319190703   	.db $00,$00,$00,$03,$19,$19,$07,$03
-  184 5548 6060200000000000   	.db $60,$60,$20,$00,$00,$00,$00,$00
-  185 5550 0000004078b800e0   	.db $00,$00,$00,$40,$78,$B8,$00,$E0
-  186 5558 0606049000000000   	.db $06,$06,$04,$90,$00,$00,$00,$00
+  183 5540 000000021e1d0007   	.db $00,$00,$00,$02,$1E,$1D,$00,$07
+  184 5548 6060200900000000   	.db $60,$60,$20,$09,$00,$00,$00,$00
+  185 5550 000000c09898e0c0   	.db $00,$00,$00,$C0,$98,$98,$E0,$C0
+  186 5558 0606040000000000   	.db $06,$06,$04,$00,$00,$00,$00,$00
   187                         	; run1_l_dark
-  188 5560 0708101c2626187c   	.db $07,$08,$10,$1C,$26,$26,$18,$7C
-  189 5568 8381433f1f18080f   	.db $83,$81,$43,$3F,$1F,$18,$08,$0F
-  190 5570 c03804b88444f81f   	.db $C0,$38,$04,$B8,$84,$44,$F8,$1F
-  191 5578 2191f26cf07020e0   	.db $21,$91,$F2,$6C,$F0,$70,$20,$E0
+  188 5560 031c201d21221ff8   	.db $03,$1C,$20,$1D,$21,$22,$1F,$F8
+  189 5568 84894f360f0e0407   	.db $84,$89,$4F,$36,$0F,$0E,$04,$07
+  190 5570 e01008386464183e   	.db $E0,$10,$08,$38,$64,$64,$18,$3E
+  191 5578 c181c2fcf81810f0   	.db $C1,$81,$C2,$FC,$F8,$18,$10,$F0
   192
   193                        *END INCLUDE gen/mario_sprites.z80
-  354                         .include "../gen/level.z80"
+  356                         .include "../gen/level.z80"
     1                         ; --- generated by tools/make_level.py ---
     2                         LEVEL_ROWS:	.equ 24
     3                         LEVEL_W:	.equ 176
@@ -2553,7 +2608,9 @@ tmp2                 c020
 tmp3                 c021
 tmp4                 c022
 ovlEnd               c023
-frameCnt             c025
+paP                  c02d
+rwBase               c031
+frameCnt             c02f
 scrX                 c026
 skidNow              c027
 OVL_BASE             c040
@@ -2637,55 +2694,54 @@ OvlSet               064e
 os_l                 0651
 os_n                 0663
 os_add               0668
-DrawColumn           0674
-dc_l                 0676
-CameraUpdate         06a4
-cu_pos               06b4
-cu_max               06bf
-cu_ok                06c2
-cu_abs               06ea
-cu_rl                06f8
-cu_left              0712
-cu_ll                0717
-cu_full              072e
-cf_l                 0730
-cu_set               0746
-cu_done              074c
-DrawMario            074d
-dm_run               0768
-dm_cyc               076b
-dm_fjump             0777
-dm_fskid             077b
-dm_fstand            077f
-dm_set               0781
-dm_t1                0793
-dm_sat               07a9
-dm_fr                07c9
-dm_out               07cd
-dm_g0                07e8
-dm_l                 07f7
-MarioCols            0818
-SndPlayJump          081b
-SndPlayCoin          0822
-SndPlayBump          0829
-SndPlaySkid          0830
-SoundUpdate          0837
-su0_l                0844
-su0_stop             0852
-su1                  085d
-su1_l                086a
-su1_stop             0878
-su2                  0883
-su2_l                0890
-su2_stop             089e
-su3                  08a9
-su3_l                08b5
-su3_stop             08c2
-PsgMute              08ce
-SndJump              08d2
-SndCoin              08eb
-SndBump              0904
-SndSkid              0914
+RedrawWindow         0674
+rw_row               0690
+rw_x                 06a7
+RedrawOvl            06c4
+ro_l                 06c7
+ro_next              070c
+OvlSetPoke           070f
+osp_out              0747
+CameraUpdate         074a
+cu_pos               075a
+cu_max               0765
+cu_ok                0768
+cu_redraw            0788
+DrawMario            0795
+dm_run               07b0
+dm_cyc               07b3
+dm_fjump             07bf
+dm_fskid             07c3
+dm_fstand            07c7
+dm_set               07c9
+dm_t1                07db
+dm_sat               07f1
+dm_fr                0811
+dm_out               0815
+dm_g0                0830
+dm_l                 083f
+MarioCols            0860
+SndPlayJump          0863
+SndPlayCoin          086a
+SndPlayBump          0871
+SndPlaySkid          0878
+SoundUpdate          087f
+su0_l                088c
+su0_stop             089a
+su1                  08a5
+su1_l                08b2
+su1_stop             08c0
+su2                  08cb
+su2_l                08d8
+su2_stop             08e6
+su3                  08f1
+su3_l                08fd
+su3_stop             090a
+PsgMute              0916
+SndJump              091a
+SndCoin              0933
+SndBump              094c
+SndSkid              095c
 TILE_N               0010
 TilePatternsSec      5000
 TileColorsSec        5080

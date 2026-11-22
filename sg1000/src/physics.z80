@@ -525,7 +525,7 @@ cy_q:
 	ld	a, (tmp2)
 	ld	e, a
 	ld	c, T_USED
-	call	OvlSet
+	call	OvlSetPoke
 	call	SndPlayCoin
 	ret
 cy_bs:
@@ -588,7 +588,7 @@ CC1:
 	cp	T_COIN
 	ret	nz
 	ld	c, T_BLANK
-	call	OvlSet
+	call	OvlSetPoke
 	call	SndPlayCoin
 	ld	hl, coinCount
 	inc	(hl)

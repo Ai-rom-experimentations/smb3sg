@@ -1,9 +1,12 @@
 ;=====================================================================
 ; camera.z80 - level tile access, overlay and the scrolling camera
 ;
-; The TMS9918A has no scroll registers, so the camera streams whole
-; name-table columns (24 bytes each) as it crosses tile boundaries,
-; exactly like SG-1000 games of the era did.
+; The TMS9918A has no scroll registers: PNT column x always shows
+; level column cam+x, so every camera-column change repaints the
+; whole 32-column window. The row-major sweep in RedrawWindow costs
+; ~30k T-states (half a frame), so the full redraw fits in one
+; vblank period even at top run speed, where a camera column lasts
+; two frames - the screen is never partially stale.
 ;=====================================================================
 
 ; d = column, e = row -> a = tile (overlay first, then ROM)
@@ -84,23 +87,132 @@ os_add:
 	ld	(ovlEnd), hl
 	ret
 
-; draw one screen column; level column in (tmp1), screen x in (tmp3)
-DrawColumn:
-	ld	c, 0			; row
-dc_l:
-	ld	a, (tmp1)
-	ld	d, a
-	ld	a, c
-	ld	e, a
-	call	TileAt
-	ld	(tmp4), a
+; Full background redraw. The TMS9918A has no scroll registers: PNT
+; column x always shows level column cam+x, so every camera-column
+; change must repaint the whole 32-column window. The sweep is row
+; major: one VDP address set per row, then 32 back-to-back data
+; writes (the VDP auto-increments), source stride 24. Rows 0-3 are
+; permanent sky (PNT cleared at boot, never redrawn).
+; Cost: 640 tiles x ~42T + overhead ~ 30k T-states: one frame.
+; tmp4 = camera column.
+RedrawWindow:
+	ld	a, (tmp4)
+	ld	l, a
 	ld	h, 0
-	ld	l, c
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl		; *8
+	ld	e, l
+	ld	d, h
+	add	hl, hl		; *16
+	add	hl, de		; *24
+	ld	de, LevelData
+	add	hl, de
+	ld	(rwBase), hl
+	ld	hl, VRAM_PNT + 4 * 32
+	ld	(paP), hl		; row address cursor
+	ld	c, 4			; row
+rw_row:
+	ld	hl, (rwBase)
+	ld	b, 0
+	add	hl, bc		; source = base + row
+	ld	a, (paP)
+	out	(VDP_CTRL), a
+	ld	a, (paP + 1)
+	or	$40
+	out	(VDP_CTRL), a
+	ld	de, 24		; source stride
+	ld	b, 32
+rw_x:
+	ld	a, (hl)
+	out	(VDP_DATA), a
+	add	hl, de
+	djnz	rw_x
+	ld	a, (paP)
+	add	a, 32
+	ld	(paP), a
+	ld	a, (paP + 1)
+	adc	a, 0
+	ld	(paP + 1), a
+	inc	c
+	ld	a, c
+	cp	24
+	jr	nz, rw_row
+	ret
+
+; repaint overlay entries (used blocks, collected coins) over the ROM
+; sweep; slot = (col, row, tile), col $FF terminates
+RedrawOvl:
+	ld	hl, OVL_BASE
+ro_l:
+	ld	a, (hl)
+	cp	$FF
+	ret	z
+	ld	(tmp1), a		; col
+	inc	hl
+	ld	a, (hl)
+	ld	(tmp2), a		; row
+	inc	hl
+	ld	a, (hl)
+	ld	(tmp3), a		; tile
+	inc	hl
+	push	hl
+	ld	a, (tmp4)
+	ld	e, a
+	ld	a, (tmp1)
+	sub	e
+	jr	c, ro_next		; left of window
+	cp	32
+	jr	nc, ro_next		; right of window
+	ld	e, a			; screen x
+	ld	a, (tmp2)
+	cp	4
+	jr	c, ro_next
+	cp	24
+	jr	nc, ro_next
+	ld	d, a			; row
+	ld	h, 0
+	ld	l, d
 	add	hl, hl
 	add	hl, hl
 	add	hl, hl
 	add	hl, hl
-	add	hl, hl		; row * 32
+	add	hl, hl		; row*32
+	ld	d, 0
+	add	hl, de
+	ld	de, VRAM_PNT
+	add	hl, de
+	call	VdpSetAddrW
+	ld	a, (tmp3)
+	out	(VDP_DATA), a
+ro_next:
+	pop	hl
+	jr	ro_l
+
+OvlSetPoke:
+	call	OvlSet
+	push	bc
+	push	de
+	ld	hl, (cam_lo)
+	srl	h
+	rr	l
+	srl	h
+	rr	l
+	srl	h
+	rr	l			; hl = camera column
+	ld	a, d
+	sub	l
+	jr	c, osp_out		; left of the window
+	cp	32
+	jr	nc, osp_out		; right of the window
+	ld	(tmp3), a		; screen x
+	ld	h, 0
+	ld	l, e			; row
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl		; row*32
 	ld	a, (tmp3)
 	ld	e, a
 	ld	d, 0
@@ -108,12 +220,11 @@ dc_l:
 	ld	de, VRAM_PNT
 	add	hl, de
 	call	VdpSetAddrW
-	ld	a, (tmp4)
-	out	(VDP_DATA), a
-	inc	c
 	ld	a, c
-	cp	24
-	jr	nz, dc_l
+	out	(VDP_DATA), a
+osp_out:
+	pop	de
+	pop	bc
 	ret
 
 ;=====================================================================
@@ -145,80 +256,22 @@ cu_ok:
 	rr	l
 	ld	a, l
 	ld	(tmp4), a		; new column
+	; The TMS9918A has no scroll registers: PNT column x always shows
+	; level column cam+x, so ANY camera-column change must repaint the
+	; whole 32-column window. The row-major sweep (RedrawWindow) costs
+	; ~30k T-states, so the full redraw fits in ONE frame even at run
+	; speed (a camera column lasts >= 2 frames) - no conveyor, no
+	; partially-stale screen.
 	ld	a, (tileColCur)
 	cp	$FF
-	jr	z, cu_full
+	jr	z, cu_redraw
 	ld	b, a
 	ld	a, (tmp4)
 	sub	b
-	jr	z, cu_done
-	ld	c, a			; signed delta
-	bit	7, a
-	jr	z, cu_abs
-	neg
-cu_abs:
-	cp	32
-	jr	nc, cu_full
-	ld	a, c
-	bit	7, a
-	jr	nz, cu_left
-	; moved right: new columns enter at the right edge
-	ld	b, a
-	ld	a, 32
-	sub	b
-	ld	d, a			; first screen x to refresh
-cu_rl:
-	ld	a, d
-	ld	(tmp3), a
-	ld	a, (tmp4)
-	add	a, d
-	ld	(tmp1), a
-	push	de
-	push	bc
-	call	DrawColumn
-	pop	bc
-	pop	de
-	inc	d
-	ld	a, d
-	cp	32
-	jr	nz, cu_rl
-	jr	cu_set
-cu_left:
-	; moved left: new columns enter at the left edge
-	neg
-	ld	b, a
-	ld	d, 0
-cu_ll:
-	ld	a, d
-	ld	(tmp3), a
-	ld	a, (tmp4)
-	add	a, d
-	ld	(tmp1), a
-	push	de
-	push	bc
-	call	DrawColumn
-	pop	bc
-	pop	de
-	inc	d
-	djnz	cu_ll
-	jr	cu_set
-cu_full:
-	ld	b, 0
-cf_l:
-	ld	a, b
-	ld	(tmp3), a
-	ld	a, (tmp4)
-	add	a, b
-	ld	(tmp1), a
-	push	bc
-	call	DrawColumn
-	pop	bc
-	inc	b
-	ld	a, b
-	cp	32
-	jr	nz, cf_l
-cu_set:
+	ret	z			; camera column unchanged
+cu_redraw:
 	ld	a, (tmp4)
 	ld	(tileColCur), a
-cu_done:
+	call	RedrawWindow
+	call	RedrawOvl
 	ret

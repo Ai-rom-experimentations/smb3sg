@@ -221,10 +221,22 @@ for (let f = 0; f < frames; f++) {
     dumpPPM(name);
     const px = rd16(0xC000), py = rd16(0xC002);
     const xv = mem[0xC004], yv = mem[0xC006];
-    console.log(`f=${f} px=${px} py=${py} xvel=${xv} yvel=${yv} onG=${mem[0xC009]} frame=${mem[0xC00D]} cam=${rd16(0xC00F)} R1=${regs[1].toString(16)} R7=${regs[7].toString(16)}`);
+    console.log(`f=${f} px=${px} py=${py} xvel=${xv} yvel=${yv} onG=${mem[0xC009]} frame=${mem[0xC00D]} cam=${rd16(0xC00F)} fcnt=${rd16(0xC02F)} R1=${regs[1].toString(16)} R7=${regs[7].toString(16)}`);
   }
 }
 console.log(`ran ${frames} frames; psg writes: ${psgLog.length}`);
+if (process.env.PNTDUMP) {
+  // settle: step until the CPU is mid-spin in WaitVBlank (pc at the
+  // in-instruction twice) so the dump never catches a half-drawn sweep
+  const WV = 0x148;
+  let seen = 0;
+  for (let g = 0; g < 400000 && seen < 2; g++) {
+    if (machine.z80.regs.pc === WV) seen++;
+    machine.step();
+  }
+  fs.writeFileSync(process.env.PNTDUMP, Buffer.from(vram.slice(0x1800, 0x1B00)));
+  fs.writeFileSync(process.env.PNTDUMP + '.cam', Buffer.from([mem[0xC00F], mem[0xC010], mem[0xC00E]]));
+}
 if (process.env.VDUMP) {
   const h = (a, n) => Array.from(vram.slice(a, a + n)).map(b => b.toString(16).padStart(2, '0')).join(' ');
   console.log('PGT0  :', h(0x0000, 24));
@@ -237,6 +249,7 @@ if (process.env.VDUMP) {
   console.log('CT1   :', h(0x2800, 24));
   console.log('SPAT  :', h(0x3800, 24));
   console.log('SAT   :', h(0x3F00, 16));
+  console.log('OVL   :', h(0xC040, 16));
   console.log('regs  :', Array.from(regs).map(b => b.toString(16)).join(' '));
 }
 if (psgLog.length) console.log('psg head:', psgLog.slice(0, 24).map(b => b.toString(16)).join(' '));

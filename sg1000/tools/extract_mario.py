@@ -118,7 +118,7 @@ def main():
                 px[i, j] = pal[bmp[j][i]]
         k = FRAMES.index((name, p))
         prev.paste(img.resize((16 * S, 16 * S), Image.NEAREST), (k * (16 * S + 8), 8))
-        for dirn, mir in (("r", False), ("l", True)):
+        for dirn, mir in (("r", True), ("l", False)):  # CHR is stored facing LEFT (SMB3 sets SPR_HFLIP to face right)
             for layer, idx in (("red", 1), ("skin", 2), ("dark", 3)):
                 groups.append(("%s_%s_%s" % (name, dirn, layer),
                                mask_bytes(bmp, idx, mir)))

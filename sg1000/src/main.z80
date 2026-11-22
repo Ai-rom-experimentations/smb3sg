@@ -94,7 +94,9 @@ tmp2:		.equ $C020
 tmp3:		.equ $C021
 tmp4:		.equ $C022
 ovlEnd:		.equ $C023	; 2 bytes: terminator slot
-frameCnt:	.equ $C025
+paP:		.equ $C02D	; 2 bytes: RedrawWindow row address cursor
+rwBase:		.equ $C031	; 2 bytes: LevelData + camcol*24
+frameCnt:	.equ $C02F	; 2 bytes: diagnostic only (was $C025, overlapped scrX)
 scrX:		.equ $C026
 skidNow:		.equ $C027
 OVL_BASE:	.equ $C040	; 48 slots x 3 bytes
